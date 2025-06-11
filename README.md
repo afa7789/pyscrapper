@@ -101,4 +101,5 @@ example output
 fill admin values
 ```
 pip install flask python-dotenv requests beautifulsoup4
+python3 server.py
 ```

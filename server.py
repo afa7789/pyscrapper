@@ -10,7 +10,7 @@ from monitor import Monitor
 from scraper import MarketRoxoScraper
 from telegram_bot import TelegramBot
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='template')
 
 # Configuração de logging
 logging.basicConfig(
