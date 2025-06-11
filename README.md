@@ -12,6 +12,7 @@
 ├── main.py           # Entry point (integrates all modules)
 ├── gui.py            # Graphical user interface (Tkinter)
 ├── monitor.py        # Background monitoring logic
+├── server.py         # Server, to host instead of GUI
 ├── scraper.py        # MarketRoxo scraping (BeautifulSoup)
 └── telegram_bot.py   # Sends messages via Telegram
 ```
@@ -29,6 +30,8 @@ There is also some test python files, that I used to make sure the scrape and te
 ## ⚙️ How to Generate an Executable (Binary)
 
 ### using .env
+
+do not forget to fill the .env it will crash if running `server.py`
 
 remember to fill the .env if you don't want to have to write the same information everytime you open the app.
 
