@@ -1,0 +1,17 @@
+altgraph==0.17.4
+beautifulsoup4==4.13.4
+certifi==2025.4.26
+charset-normalizer==3.4.2
+dotenv==0.9.9
+idna==3.10
+macholib==1.16.3
+packaging==25.0
+pyinstaller==6.14.1
+pyinstaller-hooks-contrib==2025.5
+python-dotenv==1.1.0
+requests==2.32.4
+setuptools==80.9.0
+soupsieve==2.7
+tk==0.1.0
+typing_extensions==4.14.0
+urllib3==2.4.0

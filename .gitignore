@@ -1,0 +1,13 @@
+trechos_html
+dist/*
+build/*
+dist/
+build/
+dist
+build
+__pycache__
+*.env
+seen_ads.txt
+MarketRoxoMonitor.spec
+.DS_Store
+app.log

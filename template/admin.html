@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Administração - OLN Logística</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: auto; padding: 20px; background: white; border-radius: 8px; }
+        h1 { text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; }
+        #startBtn { background-color: #4CAF50; color: white; }
+        #stopBtn { background-color: #f44336; color: white; }
+        #logBtn { background-color: #2196F3; color: white; }
+        #logOutput { margin-top: 20px; padding: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Painel de Administração</h1>
+        <div class="form-group">
+            <label for="keywords">Palavras-chave (separadas por vírgula):</label>
+            <input type="text" id="keywords" value="{{ keywords_list }}">
+        </div>
+        <div class="form-group">
+            <label for="negativeKeywords">Palavras-chave negativas (separadas por vírgula):</label>
+            <input type="text" id="negativeKeywords" value="{{ negative_keywords_list }}">
+        </div>
+        <div class="form-group">
+            <label for="token">Token do Telegram:</label>
+            <input type="text" id="token" value="{{ token }}">
+        </div>
+        <div class="form-group">
+            <label for="chatInput">Chat ID ou Número de Telefone:</label>
+            <input type="text" id="chatInput" value="{{ chat_input }}">
+        </div>
+        <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
+        <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
+        <button id="logBtn" onclick="viewLogs()">Ver Logs</button>
+        <pre id="logOutput"></pre>
+    </div>
+    <script>
+        function startMonitoring() {
+            const data = {
+                keywords_list: document.getElementById('keywords').value,
+                negative_keywords_list: document.getElementById('negativeKeywords').value,
+                token: document.getElementById('token').value,
+                chat_input: document.getElementById('chatInput').value
+            };
+            fetch('/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => alert(data.message))
+            .catch(error => alert('Erro ao iniciar monitoramento: ' + error));
+        }
+
+        function stopMonitoring() {
+            fetch('/stop', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
+                }
+            })
+            .then(response => response.json())
+            .then(data => alert(data.message))
+            .catch(error => alert('Erro ao parar monitoramento: ' + error));
+        }
+
+        function viewLogs() {
+            fetch('/logs', {
+                headers: {
+                    'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
+                }
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('logOutput').textContent = data;
+            })
+            .catch(error => alert('Erro ao carregar logs: ' + error));
+        }
+    </script>
+</body>
+</html>
