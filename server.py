@@ -127,6 +127,7 @@ def start():
         # Inicia o Monitor
         monitor = Monitor(
             keywords=filtered_keywords,
+            negative_keywords_list=negative_keywords_list,
             scraper=scraper,
             telegram_bot=telegram_bot,
             chat_id=chat_input,
@@ -172,7 +173,7 @@ def logs():
     try:
         with open('app.log', 'r', encoding='utf-8') as f:
             log_content = f.read()
-        logger.info("Logs acessados via /logs")
+        # logger.info("Logs acessados via /logs")
         return Response(log_content, mimetype='text/plain')
     except Exception as e:
         logger.error(f"Erro ao ler logs: {str(e)}")

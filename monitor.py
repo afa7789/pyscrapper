@@ -6,8 +6,9 @@ import os
 
 # in the future scraper can be multiple scrapers
 class Monitor:
-    def __init__(self, keywords, scraper, telegram_bot, chat_id, log_callback, hash_file=None, batch_size=20):
+    def __init__(self, keywords, negative_keywords_list, scraper, telegram_bot, chat_id, log_callback, hash_file=None, batch_size=20):
         self.keywords = keywords
+        self.negative_keywords_list = negative_keywords_list
         self.scraper = scraper
         self.telegram_bot = telegram_bot
         self.chat_id = chat_id
@@ -69,7 +70,7 @@ class Monitor:
                 
                 #  when we add multiple scrapers, we can loop through them
                 #  and scrape each adding the results to new_ads
-                new_ads = self.scraper.scrape(self.keywords,3)
+                new_ads = self.scraper.scrape(self.keywords,self.negative_keywords_list,3)
 
                 # Filter out already seen ads using hashes
                 truly_new_ads = []
@@ -82,6 +83,7 @@ class Monitor:
                         truly_new_ads.append(ad)
                 
                 if truly_new_ads:
+                    self.log_callback(f"✅ Encontrou {len(truly_new_ads)} anúncios ainda não vistos")
                     # Format the message to include title and URL
                     formatted_ads = [f"Título: {ad['title']}\nURL: {ad['url']}" for ad in truly_new_ads]
                     
@@ -91,15 +93,12 @@ class Monitor:
                         for msg in messages:
                             self.telegram_bot.send_message(self.chat_id, msg)
                             time.sleep(1)  # Avoid rate limiting
-                        
                         # Only if sending works, add the new ad hashes to file
                         # IMPORTANT this is the persistance mechanism
                         for ad_hash in truly_new_ads_hash:
                             self._save_ad_hash(ad_hash)
-
                     except Exception as e:
                         self.log_callback(f"❌ Erro ao enviar mensagens para Telegram: {str(e)}")
-                    
                     self.log_callback(f"✅ Enviados {len(truly_new_ads)} novos anúncios para Telegram")
                 else:
                     self.log_callback("ℹ️ Nenhum anúncio novo encontrado")

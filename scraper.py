@@ -22,7 +22,7 @@ class MarketRoxoScraper:
         query = "+".join(unique_keywords)
         return query
 
-    def scrape(self, keywords,max_pages=5,save_page=False):
+    def scrape(self, keywords, negative_keywords_list, max_pages=5,save_page=False):
         """Searches for ads across multiple MarketRoxo pages."""
         query = self._build_query(keywords)
 
@@ -50,7 +50,7 @@ class MarketRoxoScraper:
                     break
 
                 # Extract ads
-                new_ads = self._extract_ads(soup, keywords)
+                new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
                 if new_ads:
                     self.log_callback(f"Encontrados {len(new_ads)} anúncios na página {page}.")  # Debugging line
                     ads.extend(new_ads)
@@ -64,41 +64,48 @@ class MarketRoxoScraper:
 
         return ads
 
-    def _extract_ads_tested(self, filename, keywords):
+    def _extract_ads_tested(self, filename, keywords, negative_keywords_list=None):
         """Extracts ads from an HTML file by parsing its soup."""
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
         soup = BeautifulSoup(content, "html.parser")
         return self._extract_ads(soup, keywords)
 
-    def _extract_ads(self, soup, keywords):
+    def _extract_ads(self, soup, keywords, negative_keywords_list=None):
         """Extracts ads from an HTML page."""
         ads = []
         for link in soup.find_all("a", class_="olx-adcard__link"):
             ad_url = link.get("href")
             ad_title = link.get("title", "").lower()
 
-            if ad_url and ad_title and any(keyword.lower() in ad_title for keyword in keywords):
+            has_ad_url = bool(ad_url)
+            has_ad_title = bool(ad_title)
+            match_positive = any(keyword.lower() in ad_title for keyword in keywords)
+            match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list)
+            if has_ad_url and has_ad_title and match_positive and not match_negative:
                 full_url = urljoin(self.base_url, ad_url)
                 ads.append({"title": ad_title, "url": full_url})
 
         return ads
 
-    def _non_extracted_ads_tested(self, filename, keywords):
+    def _non_extracted_ads_tested(self, filename, keywords,negative_keywords_list=None):
         """Extracts ads that do not match the keywords from an HTML file."""
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
         soup = BeautifulSoup(content, "html.parser")
         return self._non_extracted_ads(soup, keywords)
 
-    def _non_extracted_ads(self,soup, keywords):
+    def _non_extracted_ads(self,soup, keywords,negative_keywords_list=None):
         _non_extracted_ads = []
         """Extracts ads that do not match the keywords."""
         for link in soup.find_all("a", class_="olx-adcard__link"):
             ad_url = link.get("href")
             ad_title = link.get("title", "").lower()
 
-            if ad_url and ad_title and not any(keyword.lower() in ad_title for keyword in keywords):
+            if ad_url and ad_title and (
+                not any(keyword.lower() in ad_title for keyword in keywords)
+                or any(negative.lower() in ad_title for negative in negative_keywords_list)
+            ):
                 full_url = urljoin(self.base_url, ad_url)
                 _non_extracted_ads.append({"title": ad_title, "url": full_url})
         return _non_extracted_ads
