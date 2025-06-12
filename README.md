@@ -47,6 +47,7 @@ Use newer python (3.11)
 python3 -m venv ./venv_project
 source ./venv_project/bin/activate
 ```
+<!-- python3 -m venv ./venv_otavio -->
 
 ### 2. Install Dependencies
 
