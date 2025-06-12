@@ -48,6 +48,11 @@ WHATSAPP_NUMBER = os.getenv("WHATSAPP_NUMBER", "")
 WHATSAPP_TEXT = os.getenv("WHATSAPP_TEXT", "")
 WEBSITE = os.getenv("WEBSITE", "")
 
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Instância global do Monitor
 monitor = None
 monitor_thread = None

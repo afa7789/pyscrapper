@@ -53,6 +53,9 @@ source ./venv_project/bin/activate
 
 ```bash
 pip install requests beautifulsoup4 tkinter pyinstaller
+pip install gunicorn
+pip freeze > requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 3. Generate Executable
@@ -107,3 +110,5 @@ fill admin values
 pip install flask python-dotenv requests beautifulsoup4
 python3 server.py
 ```
+
+gunicorn -w 4 -b 0.0.0.0:5000 server:app
