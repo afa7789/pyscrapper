@@ -4,6 +4,7 @@ from threading import Thread
 import os
 import sys
 from tkinter import messagebox # Import messagebox for user-visible errors
+from AppKit import NSProcessInfo, NSActivityUserInitiated
 
 # Add error handling for imports
 try:
@@ -27,9 +28,19 @@ except ImportError as e:
 
 class MainApp:
     def __init__(self):
-        self.root = None # Initialize root to None
+        self.root = None  # Initialize root to None
         try:
             self.root = tk.Tk()
+
+            # Prevent system sleep (macOS only)
+            def prevent_sleep():
+                activity = NSProcessInfo.processInfo().beginActivityWithOptions_reason_(
+                    NSActivityUserInitiated, "Mantendo o aplicativo ativo"
+                )
+                return activity
+
+            self.activity = prevent_sleep()  # Keep a reference to the activity
+
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
             self.gui = MarketRoxoGUI(
@@ -66,7 +77,6 @@ class MainApp:
             telegram_bot = TelegramBot(log_callback=self.gui.log,token=telegram_token)
             
             # Simple test to validate token
-            import requests
             test_url = f"https://api.telegram.org/bot{telegram_token}/getMe"
             response = requests.get(test_url, timeout=10)
             if response.status_code != 200:
