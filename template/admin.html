@@ -14,6 +14,7 @@
         #startBtn { background-color: #4CAF50; color: white; }
         #stopBtn { background-color: #f44336; color: white; }
         #logBtn { background-color: #2196F3; color: white; }
+        .status { display: inline-block; margin-left: 10px; font-size: 14px; }
         #logOutput { margin-top: 20px; padding: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; white-space: pre-wrap; }
     </style>
 </head>
@@ -39,9 +40,43 @@
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
         <button id="logBtn" onclick="viewLogs()">Ver Logs</button>
+        <span id="autoUpdateStatus" class="status"></span>
         <pre id="logOutput"></pre>
     </div>
     <script>
+        let logUpdateInterval = null;
+
+        // Função para iniciar atualização automática dos logs
+        function startAutoUpdate() {
+            if (!logUpdateInterval) {
+                logUpdateInterval = setInterval(fetchLogs, 2000);
+                document.getElementById('autoUpdateStatus').textContent = 'Atualização automática: Ativada';
+            }
+        }
+
+        // Função para parar atualização automática
+        function stopAutoUpdate() {
+            if (logUpdateInterval) {
+                clearInterval(logUpdateInterval);
+                logUpdateInterval = null;
+                document.getElementById('autoUpdateStatus').textContent = 'Atualização automática: Desativada';
+            }
+        }
+
+        // Função para buscar os logs sem alterar a UI
+        function fetchLogs() {
+            fetch('/logs', {
+                headers: {
+                    'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
+                }
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('logOutput').textContent = data;
+            })
+            .catch(error => console.error('Erro ao carregar logs: ' + error));
+        }
+
         function startMonitoring() {
             const data = {
                 keywords_list: document.getElementById('keywords').value,
@@ -58,7 +93,11 @@
                 body: JSON.stringify(data)
             })
             .then(response => response.json())
-            .then(data => alert(data.message))
+            .then(data => {
+                alert(data.message);
+                // Inicia atualização automática quando monitoramento começa
+                startAutoUpdate();
+            })
             .catch(error => alert('Erro ao iniciar monitoramento: ' + error));
         }
 
@@ -70,22 +109,27 @@
                 }
             })
             .then(response => response.json())
-            .then(data => alert(data.message))
+            .then(data => {
+                alert(data.message);
+                // Opcional: parar a atualização automática quando o monitoramento para
+                // Remova esta linha se quiser manter a atualização dos logs mesmo após parar o monitoramento
+                stopAutoUpdate();
+            })
             .catch(error => alert('Erro ao parar monitoramento: ' + error));
         }
 
         function viewLogs() {
-            fetch('/logs', {
-                headers: {
-                    'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
-                }
-            })
-            .then(response => response.text())
-            .then(data => {
-                document.getElementById('logOutput').textContent = data;
-            })
-            .catch(error => alert('Erro ao carregar logs: ' + error));
+            fetchLogs();
+            // Alternar estado da atualização automática ao clicar no botão de logs
+            if (logUpdateInterval) {
+                stopAutoUpdate();
+            } else {
+                startAutoUpdate();
+            }
         }
+
+        // Inicializar status
+        document.getElementById('autoUpdateStatus').textContent = 'Atualização automática: Desativada';
     </script>
 </body>
 </html>
