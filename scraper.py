@@ -37,7 +37,11 @@ class MarketRoxoScraper:
         """Sets up Chrome WebDriver with stealth options."""
         try:
             chrome_options = Options()
-            
+
+            # Create a unique temporary directory
+            temp_dir = tempfile.mkdtemp(prefix="chrome_profile_")
+            chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+                
             # Stealth options to avoid detection
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
@@ -50,7 +54,7 @@ class MarketRoxoScraper:
             chrome_options.add_argument("--disable-javascript")  # Try without JS first
             
             # Uncomment for headless mode (no GUI)
-            # chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--headless")
             
             # User agent
             chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
