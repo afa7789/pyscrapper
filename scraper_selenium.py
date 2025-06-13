@@ -43,75 +43,128 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self._setup_selenium()
 
     def _setup_selenium(self):
-        """Sets up Chrome WebDriver with stealth options and proper proxy handling."""
+        """Sets up Chrome WebDriver with stealth options and robust error handling."""
         try:
             chrome_options = Options()
 
+            # Basic Chrome options
             temp_dir = tempfile.mkdtemp(prefix="chrome_profile_")
             chrome_options.add_argument(f"--user-data-dir={temp_dir}")
-
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument(
-                "--disable-blink-features=AutomationControlled")
-            chrome_options.add_experimental_option(
-                "excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--disable-plugins")
             chrome_options.add_argument("--disable-images")
-
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            
+            # Set user agent
+            chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
 
-            chrome_options.add_argument(
-                f"--user-agent={self.headers['User-Agent']}")
+            # Experimental options with error handling
+            try:
+                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+            except Exception as e:
+                self.log_callback(f"⚠️ Aviso: Erro ao configurar opções experimentais: {e}")
 
-            # Fixed proxy configuration
-            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
-                proxy_url = self.proxies['http']
-                self.log_callback(
-                    f"🔗 Configurando proxy para Selenium: {proxy_url}")
-
-                # Chrome expects proxy format without 'http://' prefix for --proxy-server
-                if proxy_url.startswith('http://'):
-                    proxy_server = proxy_url[7:]  # Remove 'http://' prefix
-                else:
-                    proxy_server = proxy_url
-
-                chrome_options.add_argument(f"--proxy-server={proxy_server}")
-
-                # Additional proxy-related arguments for better compatibility
-                chrome_options.add_argument("--ignore-certificate-errors")
-                chrome_options.add_argument("--ignore-ssl-errors")
-                chrome_options.add_argument("--ignore-certificate-errors-spki")
-
-            elif self.proxies and self.proxies != "":
-                self.log_callback(
-                    f"⚠️ Formato de proxy inválido: {type(self.proxies)} - {self.proxies}")
-
-            self.driver = webdriver.Chrome(options=chrome_options)
-
-            self.driver.execute_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
-            # Test if proxy is working by checking IP
+            # Proxy configuration with enhanced error handling
             if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
                 try:
-                    self.driver.get("https://httpbin.org/ip")
-                    time.sleep(3)
-                    ip_info = self.driver.page_source
-                    self.log_callback(f"🌐 IP atual: {ip_info[:100]}...")
-                except Exception as e:
-                    self.log_callback(f"⚠️ Não foi possível verificar IP: {e}")
+                    proxy_url = self.proxies['http']
+                    self.log_callback(f"🔗 Configurando proxy para Selenium: {proxy_url}")
+                    
+                    # Chrome expects proxy format without 'http://' prefix for --proxy-server
+                    if proxy_url.startswith('http://'):
+                        proxy_server = proxy_url[7:]  # Remove 'http://' prefix
+                    else:
+                        proxy_server = proxy_url
+                        
+                    chrome_options.add_argument(f"--proxy-server={proxy_server}")
+                    
+                    # Additional proxy-related arguments
+                    chrome_options.add_argument("--ignore-certificate-errors")
+                    chrome_options.add_argument("--ignore-ssl-errors")
+                    chrome_options.add_argument("--ignore-certificate-errors-spki")
+                    chrome_options.add_argument("--disable-web-security")
+                    chrome_options.add_argument("--allow-running-insecure-content")
+                    
+                    self.log_callback(f"✅ Proxy configurado: {proxy_server}")
+                    
+                except Exception as proxy_error:
+                    self.log_callback(f"⚠️ Erro na configuração do proxy: {proxy_error}")
+                    # Continue without proxy
+            
+            elif self.proxies and self.proxies != "":
+                self.log_callback(f"⚠️ Formato de proxy inválido: {type(self.proxies)} - {self.proxies}")
 
-            self.log_callback("✅ Selenium WebDriver configurado com sucesso.")
+            # Initialize WebDriver with enhanced error handling
+            self.log_callback("🔄 Inicializando WebDriver...")
+            
+            try:
+                self.driver = webdriver.Chrome(options=chrome_options)
+                self.log_callback("✅ WebDriver inicializado com sucesso")
+            except Exception as driver_error:
+                self.log_callback(f"❌ Erro ao inicializar WebDriver: {driver_error}")
+                raise driver_error
+
+            # Set additional properties
+            try:
+                self.driver.execute_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                self.log_callback("✅ Script anti-detecção executado")
+            except Exception as script_error:
+                self.log_callback(f"⚠️ Aviso: Erro ao executar script anti-detecção: {script_error}")
+
+            # Set timeouts
+            try:
+                self.driver.implicitly_wait(10)
+                self.driver.set_page_load_timeout(120)
+                self.log_callback("✅ Timeouts configurados")
+            except Exception as timeout_error:
+                self.log_callback(f"⚠️ Aviso: Erro ao configurar timeouts: {timeout_error}")
+
+            # Test proxy if configured
+            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+                try:
+                    self.log_callback("🔍 Testando conexão com proxy...")
+                    self.driver.get("https://httpbin.org/ip")
+                    
+                    # Wait for page to load
+                    WebDriverWait(self.driver, 30).until(
+                        lambda d: d.execute_script("return document.readyState") == "complete"
+                    )
+                    
+                    ip_info = self.driver.page_source
+                    if "origin" in ip_info:
+                        self.log_callback(f"🌐 Teste de IP realizado com sucesso")
+                    else:
+                        self.log_callback("⚠️ Resposta do teste de IP não esperada")
+                        
+                except Exception as test_error:
+                    self.log_callback(f"⚠️ Não foi possível testar proxy: {test_error}")
+                    # Don't fail the whole setup for proxy test failure
+
+            self.log_callback("✅ Selenium WebDriver configurado completamente")
 
         except Exception as e:
-            self.log_callback(f"⚠️ Erro ao configurar Selenium: {e}")
+            self.log_callback(f"❌ Erro crítico ao configurar Selenium: {e}")
+            self.log_callback(f"🔍 Tipo do erro: {type(e).__name__}")
             self.log_callback(f"🔍 Debug - Tipo de proxies: {type(self.proxies)}")
             self.log_callback(f"🔍 Debug - Valor de proxies: {self.proxies}")
+            
+            # Try to clean up if driver was partially created
+            if hasattr(self, 'driver') and self.driver:
+                try:
+                    self.driver.quit()
+                except:
+                    pass
+            
             self.use_selenium = False
+            self.driver = None
 
     def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
         """
