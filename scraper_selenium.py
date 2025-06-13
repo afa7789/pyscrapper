@@ -3,6 +3,8 @@ import os
 import random
 import time
 import requests
+import shutil
+import atexit
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -11,29 +13,28 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import json
-import pdb # Importar pdb
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 
-# Import the original scraper (assuming it exists and is correct)
 from scraper import MarketRoxoScraper
-
 
 class MarketRoxoScraperSelenium(MarketRoxoScraper):
     """
     Selenium-enhanced version of MarketRoxoScraper.
-    Inherits all functionality from the original scraper and only overrides
+    Inherits all functionality from the original scraper and overrides
     the page fetching method to use Selenium instead of requests.
     """
 
-    def __init__(self, base_url, log_callback, proxies="", use_selenium=True):
+    def __init__(self, base_url, log_callback, proxies=None, use_selenium=True):
         """
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
-        super().__init__(log_callback, base_url, proxies)
-
+        super().__init__(base_url, log_callback)
         self.use_selenium = use_selenium
         self.driver = None
         self.temp_dir = None
+        self.proxies = proxies or {}
 
         self.headers.update({
             "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
@@ -43,85 +44,92 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         })
 
         self.delay = random.randint(20, 35)
+        atexit.register(self.close)
 
-        # Ensure no previous driver is running from *this instance*
         if self.use_selenium:
-            self._setup_selenium() # Calls the setup method
-
-
-    # In your _setup_selenium method, replace the proxy configuration with this:
+            self._setup_selenium()
 
     def _setup_selenium(self):
-        """Setup Selenium WebDriver with proper proxy configuration"""
+        """Sets up Chrome WebDriver with stealth options and robust error handling."""
         try:
             self.log_callback("⚙️ Iniciando setup do Selenium...")
-            
-            # Create temporary directory for Chrome profile
+            self.close()  # Clean up any existing driver or temp dir
+
             self.temp_dir = tempfile.mkdtemp(prefix="chrome_profile_")
             self.log_callback(f"📁 Diretório temporário criado: {self.temp_dir}")
-            
-            # Configure Chrome options
+
             chrome_options = Options()
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-web-security')
-            chrome_options.add_argument('--allow-running-insecure-content')
-            chrome_options.add_argument(f'--user-data-dir={self.temp_dir}')
-            
-            # Set user agent
-            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            chrome_options.add_argument(f'--user-agent={user_agent}')
-            self.log_callback(f"ℹ️ User-Agent configurado: {user_agent[:50]}...")
-            
-            # Configure experimental options
+            chrome_options.add_argument(f"--user-data-dir={self.temp_dir}")
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--disable-plugins")
+            chrome_options.add_argument("--disable-images")
+            chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
-            self.log_callback("✅ Opções experimentais configuradas.")
-            
-            # DEBUG: Print proxy info
-            self.log_callback(f"🔍 Debug - Tipo de proxies: {type(self.proxies)}")
-            self.log_callback(f"🔍 Debug - Valor de proxies: {self.proxies}")
-            
-            # FIXED PROXY CONFIGURATION
-            if self.proxies and 'http' in self.proxies:
-                import urllib.parse
-                
+
+            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
                 proxy_url = self.proxies['http']
-                parsed = urllib.parse.urlparse(proxy_url)
-                
+                self.log_callback(f"🔗 Proxy original fornecido: {proxy_url}")
+                parsed = urlparse(proxy_url)
                 if parsed.hostname and parsed.port:
-                    # This is the correct format - make sure port is converted to string
-                    proxy_server = f"{parsed.scheme}://{parsed.hostname}:{str(parsed.port)}"
-                    chrome_options.add_argument(f'--proxy-server={proxy_server}')
-                    self.log_callback(f"🔍 Proxy configurado: {proxy_server}")
-                    
-                    # Note: Chrome command line doesn't support proxy authentication
-                    # You might need to handle auth differently if required
+                    proxy_server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+                    chrome_options.add_argument(f"--proxy-server={proxy_server}")
+                    self.log_callback(f"✅ Proxy configurado: {proxy_server}")
                     if parsed.username and parsed.password:
-                        self.log_callback("⚠️ Aviso: Autenticação de proxy pode precisar ser configurada separadamente")
+                        self.log_callback("⚠️ Aviso: Autenticação de proxy pode precisar de configuração adicional")
                 else:
                     self.log_callback("❌ Formato de proxy inválido")
-            
-            # Initialize WebDriver
+                    raise ValueError(f"Formato de proxy inválido: {proxy_url}")
+
             self.log_callback("🔄 Inicializando WebDriver...")
-            
             try:
-                self.driver = webdriver.Chrome(options=chrome_options)
-                self.log_callback("✅ WebDriver inicializado com sucesso!")
-                
+                self.driver = webdriver.Chrome(
+                    service=Service(ChromeDriverManager().install()),
+                    options=chrome_options
+                )
+                self.log_callback("✅ WebDriver inicializado com sucesso")
+                self.driver.execute_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+                )
+                self.driver.implicitly_wait(10)
+                self.driver.set_page_load_timeout(120)
+            except WebDriverException as e:
+                self.log_callback(f"❌ Erro ao inicializar WebDriver: {e}")
+                raise
             except Exception as e:
                 self.log_callback(f"❌ Erro inesperado ao inicializar WebDriver: {e}")
-                self.log_callback(f"🔍 Tipo do erro: {type(e).__name__}")
-                self.log_callback(f"🔍 Debug - Valor de 'e': {str(e)}")
                 raise
-            
+
+            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+                try:
+                    self.log_callback("🔍 Testando conexão com proxy...")
+                    self.driver.get("https://api.ipify.org?format=json")
+                    WebDriverWait(self.driver, 30).until(
+                        lambda d: d.find_element(By.TAG_NAME, "body")
+                    )
+                    ip_info_text = self.driver.find_element(By.TAG_NAME, "body").text
+                    self.log_callback(f"🌐 Resposta do teste de IP: {ip_info_text}")
+                    ip_info_json = json.loads(ip_info_text)
+                    if "ip" in ip_info_json:
+                        self.log_callback(f"✅ Teste de IP realizado com sucesso. IP: {ip_info_json['ip']}")
+                    else:
+                        self.log_callback("⚠️ Resposta do teste de IP não esperada")
+                except Exception as e:
+                    self.log_callback(f"⚠️ Não foi possível testar proxy: {e}")
+
+            self.log_callback("✅ Selenium WebDriver configurado completamente")
+
         except Exception as e:
             self.log_callback(f"❌ Erro crítico ao configurar Selenium: {e}")
             self.log_callback(f"🔍 Tipo do erro: {type(e).__name__}")
-            self.log_callback(f"🔍 Debug - Tipo de proxies: {type(self.proxies)}")
-            self.log_callback(f"🔍 Debug - Valor de proxies: {self.proxies}")
+            self.log_callback(f"🔍 Debug - Proxies: {self.proxies}")
+            self.close()
+            self.use_selenium = False
+            self.driver = None
             raise
 
     def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
@@ -141,11 +149,9 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                 page_content = self._get_page_content_selenium(url)
 
                 if not page_content:
-                    self.log_callback(
-                        f"❌ Não foi possível obter conteúdo da página {page}")
+                    self.log_callback(f"❌ Não foi possível obter conteúdo da página {page}")
                     self.log_callback("🔄 Tentando com requests...")
                     page_content = self._get_page_content_requests(url)
-
                     if not page_content:
                         break
 
@@ -160,18 +166,14 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                     self.log_callback("🏁 Fim das páginas disponíveis.")
                     break
 
-                new_ads = self._extract_ads(
-                    soup, keywords, negative_keywords_list or [])
+                new_ads = self._extract_ads(soup, keywords, negative_keywords_list or [])
                 if new_ads:
-                    self.log_callback(
-                        f"✅ Encontrados {len(new_ads)} anúncios na página {page}.")
+                    self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page}.")
                     ads.extend(new_ads)
                 else:
-                    self.log_callback(
-                        f"⚪ Nenhum anúncio relevante encontrado na página {page}.")
+                    self.log_callback(f"⚪ Nenhum anúncio relevante encontrado na página {page}.")
 
                 page += 1
-
                 delay = random.randint(self.delay, self.delay + 15)
                 self.log_callback(f"⏳ Aguardando {delay} segundos...")
                 time.sleep(delay)
@@ -187,69 +189,53 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         Gets page content using Selenium with retry logic and Cloudflare handling.
         """
         if not self.use_selenium or not self.driver:
-            self.log_callback(
-                "⚠️ Selenium não configurado. Não é possível obter conteúdo.")
+            self.log_callback("⚠️ Selenium não configurado. Não é possível obter conteúdo.")
             return None
 
         max_retries = 10
-        delay_between_retries = 15  # seconds
-        page_load_timeout = 120  # seconds
-        cloudflare_timeout = 45  # seconds
+        delay_between_retries = 15
+        page_load_timeout = 120
+        cloudflare_timeout = 45
 
         for attempt in range(1, max_retries + 1):
-            driver = None
             try:
-                self.log_callback(
-                    f"🔄 Tentativa {attempt}/{max_retries}: Carregando {url}")
+                self.log_callback(f"🔄 Tentativa {attempt}/{max_retries}: Carregando {url}")
+                self.driver.set_page_load_timeout(page_load_timeout)
+                self.driver.get(url)
 
-                driver = self.driver
-                driver.set_page_load_timeout(page_load_timeout)
-                driver.get(url)
-
-                WebDriverWait(driver, page_load_timeout).until(
-                    lambda d: d.execute_script(
-                        "return document.readyState") == "complete"
+                WebDriverWait(self.driver, page_load_timeout).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
                 )
 
-                page_source = driver.page_source.lower()
+                page_source = self.driver.page_source.lower()
                 if any(s in page_source for s in ["cloudflare", "checking your browser", "cf-browser-verification"]):
-                    self.log_callback(
-                        "🔒 Detectado desafio Cloudflare. Aguardando resolução...")
-
+                    self.log_callback("🔒 Detectado desafio Cloudflare. Aguardando resolução...")
                     time.sleep(15)
-
                     try:
-                        WebDriverWait(driver, cloudflare_timeout).until(
+                        WebDriverWait(self.driver, cloudflare_timeout).until(
                             lambda d: "cloudflare" not in d.page_source.lower()
                         )
                         self.log_callback("✅ Desafio Cloudflare resolvido.")
                     except TimeoutException:
-                        self.log_callback(
-                            "⏰ Timeout no Cloudflare. Tentando continuar...")
+                        self.log_callback("⏰ Timeout no Cloudflare. Tentando continuar...")
 
-                content = driver.page_source
-                self.log_callback(
-                    f"✅ Tentativa {attempt}/{max_retries}: Página carregada com sucesso")
+                content = self.driver.page_source
+                self.log_callback(f"✅ Tentativa {attempt}/{max_retries}: Página carregada com sucesso")
                 return content
 
             except TimeoutException as e:
-                self.log_callback(
-                    f"⏰ Tentativa {attempt}/{max_retries}: Timeout ao carregar {url} - {e}")
+                self.log_callback(f"⏰ Tentativa {attempt}/{max_retries}: Timeout ao carregar {url} - {e}")
                 if attempt < max_retries:
-                    self.log_callback(
-                        f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
+                    self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
                     time.sleep(delay_between_retries)
 
             except Exception as e:
-                self.log_callback(
-                    f"❌ Tentativa {attempt}/{max_retries} falhou com erro: {e}")
+                self.log_callback(f"❌ Tentativa {attempt}/{max_retries} falhou com erro: {e}")
                 if attempt < max_retries:
-                    self.log_callback(
-                        f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
+                    self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
                     time.sleep(delay_between_retries)
 
-        self.log_callback(
-            f"❌ Todas as {max_retries} tentativas falharam para {url}")
+        self.log_callback(f"❌ Todas as {max_retries} tentativas falharam para {url}")
         return None
 
     def _get_page_content_requests(self, url):
@@ -271,7 +257,6 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         negative_keywords_list = negative_keywords_list or []
         try:
             ads = []
-
             selectors = [
                 "a.olx-adcard__link",
                 "a[class*='adcard']",
@@ -285,18 +270,15 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                 links = soup.select(selector)
                 if links:
                     links_found = links
-                    self.log_callback(
-                        f"🎯 Encontrados {len(links)} links usando seletor: {selector}")
+                    self.log_callback(f"🎯 Encontrados {len(links)} links usando seletor: {selector}")
                     break
 
             if not links_found:
-                self.log_callback(
-                    "❌ Nenhum link de anúncio encontrado. Verifique os seletores.")
+                self.log_callback("❌ Nenhum link de anúncio encontrado. Verifique os seletores.")
                 return []
 
             for link in links_found:
                 ad_url = link.get("href")
-
                 ad_title = (
                     link.get("title", "") or
                     link.get("aria-label", "") or
@@ -304,11 +286,8 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                 ).lower()
 
                 if ad_url and ad_title:
-                    match_positive = any(
-                        keyword.lower() in ad_title for keyword in keywords)
-                    match_negative = any(
-                        negative.lower() in ad_title for negative in negative_keywords_list)
-
+                    match_positive = any(keyword.lower() in ad_title for keyword in keywords)
+                    match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list)
                     if match_positive and not match_negative:
                         full_url = urljoin(self.base_url, ad_url)
                         ads.append({"title": ad_title, "url": full_url})
@@ -321,24 +300,27 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
 
     def close(self):
         """Close the Selenium driver properly."""
-        if self.driver:
-            try:
-                self.driver.quit()
-                self.log_callback("🔒 Selenium WebDriver fechado.")
-            except Exception as e:
-                self.log_callback(f"⚠️ Erro ao fechar WebDriver: {e}")
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            try:
-                import shutil
-                shutil.rmtree(self.temp_dir)
-                self.log_callback(f"🗑️ Diretório temporário removido: {self.temp_dir}")
-            except Exception as e:
-                self.log_callback(f"⚠️ Erro ao remover diretório temporário: {e}")
+        try:
+            if self.driver:
+                try:
+                    self.driver.quit()
+                    self.log_callback("🔒 Selenium WebDriver fechado.")
+                except Exception as e:
+                    self.log_callback(f"⚠️ Erro ao fechar WebDriver: {e}")
+                self.driver = None
+
+            if self.temp_dir and os.path.exists(self.temp_dir):
+                try:
+                    shutil.rmtree(self.temp_dir)
+                    self.log_callback(f"🗑️ Diretório temporário removido: {self.temp_dir}")
+                except Exception as e:
+                    self.log_callback(f"⚠️ Erro ao remover diretório temporário: {e}")
+                self.temp_dir = None
+        except Exception as e:
+            self.log_callback(f"⚠️ Erro durante cleanup: {e}")
 
     def __enter__(self):
-        """Context manager entry."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
         self.close()
