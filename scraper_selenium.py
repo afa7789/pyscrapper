@@ -31,9 +31,11 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
-        if log_callback is None:
-            raise ValueError("log_callback must be a callable function")
-        super().__init__(base_url, log_callback)
+        if not callable(log_callback):
+            raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
+        self.log_callback(f"🔍 Debug: MarketRoxoScraperSelenium received log_callback={log_callback}")
+        super().__init__(log_callback, base_url, proxies)
+        self.log_callback(f"🔍 Debug: After super().__init__, self.log_callback={self.log_callback}")
         self.use_selenium = use_selenium
         self.driver = None
         self.temp_dir = None
@@ -56,12 +58,13 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         """Sets up Chrome WebDriver with stealth options and robust error handling."""
         try:
             self.log_callback("⚙️ Iniciando setup do Selenium...")
-            self.close()  # Clean up any existing driver or temp dir
+            self.close()
 
             self.temp_dir = tempfile.mkdtemp(prefix="chrome_profile_")
             self.log_callback(f"📁 Diretório temporário criado: {self.temp_dir}")
 
             chrome_options = Options()
+            chrome_options.add_argument(f"--user-data-dir={self.temp_dir}")
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
