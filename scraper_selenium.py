@@ -18,7 +18,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
 # Assuming 'MarketRoxoScraper' is defined in 'scraper.py'
-from scraper import MarketRoxoScraper # Uncomment this if scraper.py is a separate file
+from scraper import MarketRoxoScraper
 
 
 class MarketRoxoScraperSelenium(MarketRoxoScraper):
@@ -41,15 +41,12 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         self.driver = None
         self.temp_dir = None
         self.proxies = proxies or {}
-        # self.selenium_complete_setup = False # Remove this or set to True if you want the full setup always
-
         self.headers.update({
             "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
             "Sec-Fetch-Dest": "document",
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "none"
         })
-
         self.delay = random.randint(20, 35)
         atexit.register(self.close)
 
@@ -81,46 +78,57 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         self.close() # Ensure any previous driver instance is closed
 
         try:
-            # Start with minimal options
             chrome_options = self.setup_minimal()
-
-            # Always add additional stealth and user-agent options when setting up Selenium
             chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
 
-            # Configure proxy if available and supported
-            parsed_proxy = None
-            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
-                proxy_url = self.proxies['http']
-                self.log_callback(f"🔗 Proxy original fornecido: {proxy_url}")
-                parsed_proxy = urlparse(proxy_url)
-                if parsed_proxy.hostname and parsed_proxy.port:
-                    if parsed_proxy.username or parsed_proxy.password:
-                        self.log_callback("⚠️ Proxy com autenticação detectado. Ignorando proxy devido à falta de suporte nativo no Selenium.")
+            # --- MODIFIED PROXY HANDLING ---
+            configured_proxy_server = None
+            if self.proxies and isinstance(self.proxies, dict):
+                http_proxy = self.proxies.get('http')
+                https_proxy = self.proxies.get('https')
+
+                proxy_to_use = http_proxy if http_proxy else https_proxy # Prefer http, then https
+
+                if proxy_to_use:
+                    self.log_callback(f"🔗 Proxy original fornecido: {proxy_to_use}")
+                    parsed_proxy = urlparse(proxy_to_use)
+                    
+                    if parsed_proxy.hostname and parsed_proxy.port:
+                        if parsed_proxy.username or parsed_proxy.password:
+                            self.log_callback("⚠️ Proxy com autenticação detectado. Ignorando proxy devido à falta de suporte nativo no Selenium.")
+                        else:
+                            configured_proxy_server = f"{parsed_proxy.scheme}://{parsed_proxy.hostname}:{parsed_proxy.port}"
+                            chrome_options.add_argument(f"--proxy-server={configured_proxy_server}")
+                            self.log_callback(f"✅ Proxy configurado: {configured_proxy_server}")
                     else:
-                        proxy_server = f"{parsed_proxy.scheme}://{parsed_proxy.hostname}:{parsed_proxy.port}"
-                        chrome_options.add_argument(f"--proxy-server={proxy_server}")
-                        self.log_callback(f"✅ Proxy configurado: {proxy_server}")
-                else:
-                    self.log_callback("❌ Formato de proxy inválido")
-                    raise ValueError(f"Formato de proxy inválido: {proxy_url}")
+                        self.log_callback(f"❌ Formato de proxy inválido: {proxy_to_use}")
+                        raise ValueError(f"Formato de proxy inválido: {proxy_to_use}")
+            # --- END MODIFIED PROXY HANDLING ---
 
             self.log_callback("🔄 Inicializando WebDriver...")
             
-            service = Service(ChromeDriverManager().install(), log_output="chromedriver.log")
+            # --- MODIFIED WEBDRIVER INITIALIZATION ---
+            driver_path = ChromeDriverManager().install()
+            if not driver_path or not os.path.exists(driver_path):
+                raise RuntimeError(f"ChromeDriver not found or path invalid: {driver_path}")
+            self.log_callback(f"✅ ChromeDriver path: {driver_path}")
+
+            service = Service(driver_path, log_output="chromedriver.log")
+            
+            self.log_callback("Attempting to create WebDriver instance...")
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.log_callback("✅ WebDriver inicializado com sucesso")
 
-            # Apply stealth bypass for navigator.webdriver
             self.driver.execute_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
             )
             self.driver.implicitly_wait(10)
             self.driver.set_page_load_timeout(120)
 
-            # Test proxy connection if a non-authenticated proxy was configured
-            if parsed_proxy and not (parsed_proxy.username or parsed_proxy.password):
+            # Test proxy connection only if a non-authenticated proxy was configured and applied
+            if configured_proxy_server: # Only test if a proxy was actually configured
                 try:
                     self.log_callback("🔍 Testando conexão com proxy...")
                     self.driver.get("https://api.ipify.org?format=json")
@@ -142,8 +150,12 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self.log_callback(f"❌ Erro ao inicializar WebDriver: {str(e)}")
             self.close_and_disable_selenium(e)
             raise
-        except ValueError as e: # Catch specific proxy format errors
+        except ValueError as e:
             self.log_callback(f"❌ Erro de configuração de proxy: {str(e)}")
+            self.close_and_disable_selenium(e)
+            raise
+        except RuntimeError as e: # Catch the new ChromeDriver path error
+            self.log_callback(f"❌ Erro de ChromeDriver: {str(e)}")
             self.close_and_disable_selenium(e)
             raise
         except Exception as e:
