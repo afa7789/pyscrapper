@@ -1,5 +1,6 @@
 import requests
 
+
 class TelegramBot:
     def __init__(self, log_callback, token):
         self.token = token
@@ -8,15 +9,16 @@ class TelegramBot:
     def send_message(self, identifier, text):
         """Sends message to a chat ID, phone number, or username (if valid)."""
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        
+
         # Check if identifier is a chat ID (numeric, can be a string or int)
         if isinstance(identifier, (int, str)) and str(identifier).isdigit():
             chat_id = identifier
         else:
             # Fetches updates to find the chat_id associated with the phone number or username
-            updates = requests.get(f"https://api.telegram.org/bot{self.token}/getUpdates").json()
+            updates = requests.get(
+                f"https://api.telegram.org/bot{self.token}/getUpdates").json()
             chat_id = None
-            
+
             for update in updates.get("result", []):
                 if "message" in update and "chat" in update["message"]:
                     chat = update["message"]["chat"]
@@ -33,15 +35,17 @@ class TelegramBot:
                     elif chat.get("username") == f"@{identifier}" or chat.get("username") == identifier:
                         chat_id = chat["id"]
                         break
-            
+
             if not chat_id:
-                self.log_callback("Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
-                raise ValueError("Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
-        
+                self.log_callback(
+                    "Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
+                raise ValueError(
+                    "Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
+
         # Sends the message
         params = {"chat_id": chat_id, "text": text}
         response = requests.post(url, params=params)
-        
+
         if response.status_code != 200:
             self.log_callback(f"Erro ao enviar mensagem: {response.text}")
             raise Exception(f"Erro ao enviar mensagem: {response.text}")
@@ -53,9 +57,10 @@ class TelegramBot:
             response = requests.get(url)
             # print(response)
             if response.status_code != 200:
-                self.log_callback(f"Erro ao obter atualizações: {response.text}")
+                self.log_callback(
+                    f"Erro ao obter atualizações: {response.text}")
                 raise Exception(f"Erro ao obter atualizações: {response.text}")
-            
+
             updates = response.json().get("result", [])
             users = {}
 
@@ -69,19 +74,21 @@ class TelegramBot:
                         "first_name": chat.get("first_name", "N/A"),
                         "phone_number": "N/A"
                     }
-                    
+
                     # Check if contact information is available
                     if "contact" in update["message"]:
-                        user_info["phone_number"] = update["message"]["contact"].get("phone_number", "N/A")
-                    
+                        user_info["phone_number"] = update["message"]["contact"].get(
+                            "phone_number", "N/A")
+
                     users[chat_id] = user_info
-            
+
             user_list = list(users.values())
             if not user_list:
-                self.log_callback("Nenhum usuário encontrou interação com o bot.")
-            
+                self.log_callback(
+                    "Nenhum usuário encontrou interação com o bot.")
+
             return user_list
-        
+
         except Exception as e:
             self.log_callback(f"Erro ao listar usuários: {str(e)}")
             raise Exception(f"Erro ao listar usuários: {str(e)}")

@@ -17,7 +17,7 @@ app = Flask(__name__, template_folder='template')
 logging.basicConfig(
     filename='app.log',
     filemode='w',
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname).1s - %(message)s',
     datefmt='%H:%M:%S'
 )
@@ -34,8 +34,10 @@ NEGATIVE_KEYWORDS = os.getenv("NEGATIVE_KEYWORDS_LIST", "")
 
 BASE_URL = os.getenv("MAIN_URL_SCRAPE_ROXO", "")
 if not BASE_URL:
-    logger.error("Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
-    raise ValueError("Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
+    logger.error(
+        "Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
+    raise ValueError(
+        "Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
 
 # Credenciais para Basic Auth
 USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -65,9 +67,11 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 monitor = None
 monitor_thread = None
 
+
 def check_auth(username, password):
     """Verifica as credenciais do Basic Auth."""
     return username == USERNAME and password == PASSWORD
+
 
 def authenticate():
     """Resposta para autenticação não autorizada."""
@@ -75,6 +79,7 @@ def authenticate():
         'Autenticação necessária.', 401,
         {'WWW-Authenticate': 'Basic realm="Login Required"'}
     )
+
 
 def requires_auth(f):
     """Decorador para rotas protegidas por Basic Auth."""
@@ -85,6 +90,7 @@ def requires_auth(f):
             return authenticate()
         return f(*args, **kwargs)
     return decorated
+
 
 @app.route('/')
 def home():
@@ -103,6 +109,7 @@ def home():
         website=WEBSITE
     )
 
+
 @app.route('/admin')
 @requires_auth
 def admin():
@@ -118,6 +125,7 @@ def admin():
         password=PASSWORD
     )
 
+
 @app.route('/start', methods=['POST'])
 @requires_auth
 def start():
@@ -127,17 +135,21 @@ def start():
     try:
 
         data = request.get_json()
-        keywords_list = [kw.strip() for kw in data['keywords_list'].split(",") if kw.strip()]
-        negative_keywords_list = [kw.strip() for kw in data['negative_keywords_list'].split(",") if kw.strip()]
+        keywords_list = [kw.strip()
+                         for kw in data['keywords_list'].split(",") if kw.strip()]
+        negative_keywords_list = [
+            kw.strip() for kw in data['negative_keywords_list'].split(",") if kw.strip()]
         token = data['token']
         chat_input = data['chat_input']
 
         # Configura o TelegramBot e Scraper
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
-        scraper = MarketRoxoScraperSelenium(log_callback=logger.info, base_url=BASE_URL, proxies=PROXIES)
+        scraper = MarketRoxoScraperSelenium(
+            log_callback=logger.info, base_url=BASE_URL, proxies=PROXIES)
 
         # Filtra palavras-chave negativas
-        filtered_keywords = [kw for kw in keywords_list if kw not in negative_keywords_list]
+        filtered_keywords = [
+            kw for kw in keywords_list if kw not in negative_keywords_list]
 
         # Inicia o Monitor
         monitor = Monitor(
@@ -154,11 +166,13 @@ def start():
         monitor_thread.daemon = True
         monitor_thread.start()
 
-        logger.info(f"Monitoramento iniciado com palavras-chave: {', '.join(filtered_keywords)}, chat_id: {chat_input}")
+        logger.info(
+            f"Monitoramento iniciado com palavras-chave: {', '.join(filtered_keywords)}, chat_id: {chat_input}")
         return {"message": "Monitoramento iniciado com sucesso!"}, 200
     except Exception as e:
         logger.error(f"Erro ao iniciar monitoramento: {str(e)}")
         return {"message": f"Erro ao iniciar monitoramento: {str(e)}"}, 500
+
 
 @app.route('/stop', methods=['POST'])
 @requires_auth
@@ -181,6 +195,7 @@ def stop():
         logger.error(f"Erro ao parar monitoramento: {str(e)}")
         return {"message": f"Erro ao parar monitoramento: {str(e)}"}, 500
 
+
 @app.route('/logs')
 @requires_auth
 def logs():
@@ -193,6 +208,7 @@ def logs():
     except Exception as e:
         logger.error(f"Erro ao ler logs: {str(e)}")
         return {"message": f"Erro ao ler logs: {str(e)}"}, 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

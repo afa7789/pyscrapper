@@ -106,3 +106,11 @@ python3 server.py
 # in prod:
 gunicorn -w 4 -b 0.0.0.0:5000 server:app
 ```
+
+![alt text](image-1.png)
+
+## Format code!
+```bash
+    pip install autopep8
+    autopep8 --in-place --recursive .
+```
