@@ -25,7 +25,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
-        super().__init__(base_url, log_callback, proxies)
+        super().__init__( log_callback, base_url, proxies)
         
         self.use_selenium = use_selenium
         self.driver = None

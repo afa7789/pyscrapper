@@ -7,8 +7,9 @@ import json
 import base64
 from threading import Thread
 from monitor import Monitor
-from scraper import MarketRoxoScraper
+from scraper_selenium import MarketRoxoScraperSelenium
 from telegram_bot import TelegramBot
+# import pdb  # Import pdb at the top of server.py
 
 app = Flask(__name__, template_folder='template')
 
@@ -118,9 +119,11 @@ def admin():
 @app.route('/start', methods=['POST'])
 @requires_auth
 def start():
+    # pdb.set_trace()
     """Inicia o monitoramento com os parâmetros fornecidos."""
     global monitor, monitor_thread
     try:
+
         data = request.get_json()
         keywords_list = [kw.strip() for kw in data['keywords_list'].split(",") if kw.strip()]
         negative_keywords_list = [kw.strip() for kw in data['negative_keywords_list'].split(",") if kw.strip()]
@@ -129,7 +132,7 @@ def start():
 
         # Configura o TelegramBot e Scraper
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
-        scraper = MarketRoxoScraper(log_callback=logger.info, base_url=BASE_URL, proxies=PROXIES)
+        scraper = MarketRoxoScraperSelenium(log_callback=logger.info, base_url=BASE_URL, proxies=PROXIES)
 
         # Filtra palavras-chave negativas
         filtered_keywords = [kw for kw in keywords_list if kw not in negative_keywords_list]
