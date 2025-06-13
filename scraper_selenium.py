@@ -17,7 +17,9 @@ import json
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
-from scraper import MarketRoxoScraper
+# Assuming 'MarketRoxoScraper' is defined in 'scraper.py'
+from scraper import MarketRoxoScraper # Uncomment this if scraper.py is a separate file
+
 
 class MarketRoxoScraperSelenium(MarketRoxoScraper):
     """
@@ -31,15 +33,15 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
-        # if not callable(log_callback):
-        #     raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
-        # self.log_callback(f"🔍 Debug: MarketRoxoScraperSelenium received log_callback={log_callback}")
+        if not callable(log_callback):
+            raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
         super().__init__(log_callback, base_url, proxies)
-        self.log_callback(f"🔍 Debug: After super().__init__, self.log_callback={self.log_callback}")
+        self.log_callback(f"🔍 Debug: MarketRoxoScraperSelenium initialized with log_callback={self.log_callback}")
         self.use_selenium = use_selenium
         self.driver = None
         self.temp_dir = None
         self.proxies = proxies or {}
+        self.selenium_complete_setup = False
 
         self.headers.update({
             "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
@@ -53,87 +55,110 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
 
         if self.use_selenium:
             self._setup_selenium()
-
-    def _setup_selenium(self):
-        """Sets up Chrome WebDriver with stealth options and robust error handling."""
+        
+    def setup_minimal(self):
+        """
+        Sets up a minimal Chrome WebDriver configuration and returns the chrome_options object.
+        """
         try:
-            self.log_callback("⚙️ Iniciando setup do Selenium...")
-            self.close()
-
-            self.temp_dir = tempfile.mkdtemp(prefix="chrome_profile_")
-            self.log_callback(f"📁 Diretório temporário criado: {self.temp_dir}")
-
+            self.log_callback("⚙️ Iniciando setup minimal do Selenium para configurar as opções do Chrome...")
             chrome_options = Options()
-            chrome_options.add_argument(f"--user-data-dir={self.temp_dir}")
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-plugins")
-            chrome_options.add_argument("--disable-images")
-            chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+            self.log_callback("✅ Opções mínimas do WebDriver configuradas.")
+            return chrome_options
+        except Exception as e:
+            self.log_callback(f"❌ Erro ao configurar opções mínimas do WebDriver: {str(e)}")
+            raise
 
-            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
-                proxy_url = self.proxies['http']
-                self.log_callback(f"🔗 Proxy original fornecido: {proxy_url}")
-                parsed = urlparse(proxy_url)
-                if parsed.hostname and parsed.port:
-                    proxy_server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
-                    chrome_options.add_argument(f"--proxy-server={proxy_server}")
-                    self.log_callback(f"✅ Proxy configurado: {proxy_server}")
-                    if parsed.username and parsed.password:
-                        self.log_callback("⚠️ Aviso: Autenticação de proxy pode precisar de configuração adicional (e.g., Chrome extension)")
-                else:
-                    self.log_callback("❌ Formato de proxy inválido")
-                    raise ValueError(f"Formato de proxy inválido: {proxy_url}")
+    def _setup_selenium(self):
+        """
+        Sets up Chrome WebDriver with stealth options, proxy configuration,
+        and robust error handling.
+        """
+        self.log_callback("⚙️ Iniciando setup completo do Selenium...")
+        self.close() # Ensure any previous driver instance is closed
 
-            self.log_callback("🔄 Inicializando WebDriver...")
-            try:
+        try:
+            # Start with minimal options
+            chrome_options = self.setup_minimal()
+
+            if self.selenium_complete_setup: 
+                # Add additional stealth and user-agent options
+                chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
+                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+
+                # Configure proxy if available and supported
+                parsed_proxy = None
+                if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+                    proxy_url = self.proxies['http']
+                    self.log_callback(f"🔗 Proxy original fornecido: {proxy_url}")
+                    parsed_proxy = urlparse(proxy_url)
+                    if parsed_proxy.hostname and parsed_proxy.port:
+                        if parsed_proxy.username or parsed_proxy.password:
+                            self.log_callback("⚠️ Proxy com autenticação detectado. Ignorando proxy devido à falta de suporte nativo no Selenium.")
+                        else:
+                            proxy_server = f"{parsed_proxy.scheme}://{parsed_proxy.hostname}:{parsed_proxy.port}"
+                            chrome_options.add_argument(f"--proxy-server={proxy_server}")
+                            self.log_callback(f"✅ Proxy configurado: {proxy_server}")
+                    else:
+                        self.log_callback("❌ Formato de proxy inválido")
+                        raise ValueError(f"Formato de proxy inválido: {proxy_url}")
+
+                self.log_callback("🔄 Inicializando WebDriver...")
                 service = Service(ChromeDriverManager().install(), log_output="chromedriver.log")
                 self.driver = webdriver.Chrome(service=service, options=chrome_options)
                 self.log_callback("✅ WebDriver inicializado com sucesso")
+
+                # Apply stealth bypass for navigator.webdriver
                 self.driver.execute_script(
                     "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
                 )
                 self.driver.implicitly_wait(10)
                 self.driver.set_page_load_timeout(120)
-            except WebDriverException as e:
-                self.log_callback(f"❌ Erro ao inicializar WebDriver: {e}")
-                raise
-            except Exception as e:
-                self.log_callback(f"❌ Erro inesperado ao inicializar WebDriver: {e}")
-                raise
 
-            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
-                try:
-                    self.log_callback("🔍 Testando conexão com proxy...")
-                    self.driver.get("https://api.ipify.org?format=json")
-                    WebDriverWait(self.driver, 30).until(
-                        lambda d: d.find_element(By.TAG_NAME, "body")
-                    )
-                    ip_info_text = self.driver.find_element(By.TAG_NAME, "body").text
-                    self.log_callback(f"🌐 Resposta do teste de IP: {ip_info_text}")
-                    ip_info_json = json.loads(ip_info_text)
-                    if "ip" in ip_info_json:
-                        self.log_callback(f"✅ Teste de IP realizado com sucesso. IP: {ip_info_json['ip']}")
-                    else:
-                        self.log_callback("⚠️ Resposta do teste de IP não esperada")
-                except Exception as e:
-                    self.log_callback(f"⚠️ Não foi possível testar proxy: {e}")
+                # Test proxy connection if a non-authenticated proxy was configured
+                if parsed_proxy and not (parsed_proxy.username or parsed_proxy.password):
+                    try:
+                        self.log_callback("🔍 Testando conexão com proxy...")
+                        self.driver.get("https://api.ipify.org?format=json")
+                        WebDriverWait(self.driver, 30).until(
+                            lambda d: d.find_element(By.TAG_NAME, "body")
+                        )
+                        ip_info_text = self.driver.find_element(By.TAG_NAME, "body").text
+                        self.log_callback(f"🌐 Resposta do teste de IP: {ip_info_text}")
+                        ip_info_json = json.loads(ip_info_text)
+                        if "ip" in ip_info_json:
+                            self.log_callback(f"✅ Teste de IP realizado com sucesso. IP: {ip_info_json['ip']}")
+                        else:
+                            self.log_callback("⚠️ Resposta do teste de IP não esperada")
+                    except Exception as e:
+                        self.log_callback(f"⚠️ Não foi possível testar proxy: {str(e)}")
+                self.log_callback("✅ Selenium WebDriver configurado completamente.")
 
-            self.log_callback("✅ Selenium WebDriver configurado completamente")
-
+        except WebDriverException as e:
+            self.log_callback(f"❌ Erro ao inicializar WebDriver: {str(e)}")
+            self.close_and_disable_selenium(e)
+            raise
+        except ValueError as e: # Catch specific proxy format errors
+            self.log_callback(f"❌ Erro de configuração de proxy: {str(e)}")
+            self.close_and_disable_selenium(e)
+            raise
         except Exception as e:
-            self.log_callback(f"❌ Erro crítico ao configurar Selenium: {e}")
+            self.log_callback(f"❌ Erro crítico ao configurar Selenium: {str(e)}")
             self.log_callback(f"🔍 Tipo do erro: {type(e).__name__}")
             self.log_callback(f"🔍 Debug - Proxies: {self.proxies}")
-            self.close()
-            self.use_selenium = False
-            self.driver = None
+            self.close_and_disable_selenium(e)
             raise
+
+    def close_and_disable_selenium(self, exception):
+        """Helper to close driver and disable Selenium on critical errors."""
+        self.log_callback(f"❗ Desativando Selenium devido a erro crítico: {type(exception).__name__} - {str(exception)}")
+        self.close()
+        self.use_selenium = False
+        self.driver = None
 
     def _terminate_chrome_processes(self):
         """Terminate any lingering Chrome processes."""
@@ -144,7 +169,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                     proc.wait(timeout=3)
                     self.log_callback(f"✅ Terminated process: {proc.info['name']}")
         except Exception as e:
-            self.log_callback(f"⚠️ Erro ao terminar processos do Chrome: {e}")
+            self.log_callback(f"⚠️ Erro ao terminar processos do Chrome: {str(e)}")
 
     def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
         """
@@ -193,7 +218,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                 time.sleep(delay)
 
             except Exception as e:
-                self.log_callback(f"💥 Erro na página {page}: {e}")
+                self.log_callback(f"💥 Erro na página {page}: {str(e)}")
                 break
 
         return ads
@@ -238,13 +263,13 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                 return content
 
             except TimeoutException as e:
-                self.log_callback(f"⏰ Tentativa {attempt}/{max_retries}: Timeout ao carregar {url} - {e}")
+                self.log_callback(f"⏰ Tentativa {attempt}/{max_retries}: Timeout ao carregar {url} - {str(e)}")
                 if attempt < max_retries:
                     self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
                     time.sleep(delay_between_retries)
 
             except Exception as e:
-                self.log_callback(f"❌ Tentativa {attempt}/{max_retries} falhou com erro: {e}")
+                self.log_callback(f"❌ Tentativa {attempt}/{max_retries} falhou com erro: {str(e)}")
                 if attempt < max_retries:
                     self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
                     time.sleep(delay_between_retries)
@@ -261,7 +286,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             response.raise_for_status()
             return response.text
         except Exception as e:
-            self.log_callback(f"❌ Erro no requests: {e}")
+            self.log_callback(f"❌ Erro no requests: {str(e)}")
             return None
 
     def _extract_ads(self, soup, keywords, negative_keywords_list=None):
@@ -309,7 +334,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             return ads
 
         except Exception as e:
-            self.log_callback(f"⚠️ Erro na extração melhorada: {e}")
+            self.log_callback(f"⚠️ Erro na extração melhorada: {str(e)}")
             return []
 
     def close(self):
@@ -321,7 +346,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                     self.driver.quit()
                     self.log_callback("🔒 Selenium WebDriver fechado.")
                 except Exception as e:
-                    self.log_callback(f"⚠️ Erro ao fechar WebDriver: {e}")
+                    self.log_callback(f"⚠️ Erro ao fechar WebDriver: {str(e)}")
                 self.driver = None
 
             if self.temp_dir and os.path.exists(self.temp_dir):
@@ -329,10 +354,10 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                     shutil.rmtree(self.temp_dir)
                     self.log_callback(f"🗑️ Diretório temporário removido: {self.temp_dir}")
                 except Exception as e:
-                    self.log_callback(f"⚠️ Erro ao remover diretório temporário: {e}")
+                    self.log_callback(f"⚠️ Erro ao remover diretório temporário: {str(e)}")
                 self.temp_dir = None
         except Exception as e:
-            self.log_callback(f"⚠️ Erro durante cleanup: {e}")
+            self.log_callback(f"⚠️ Erro durante cleanup: {str(e)}")
 
     def __enter__(self):
         return self
