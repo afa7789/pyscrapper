@@ -48,6 +48,11 @@ WHATSAPP_NUMBER = os.getenv("WHATSAPP_NUMBER", "")
 WHATSAPP_TEXT = os.getenv("WHATSAPP_TEXT", "")
 WEBSITE = os.getenv("WEBSITE", "")
 
+PROXIES = {
+    "http": os.getenv("HTTP_PROXY", ""),
+    "https": os.getenv("HTTPS_PROXY", "")
+}
+
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -124,7 +129,7 @@ def start():
 
         # Configura o TelegramBot e Scraper
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
-        scraper = MarketRoxoScraper(base_url=BASE_URL,log_callback=logger.info)
+        scraper = MarketRoxoScraper(log_callback=logger.info, base_url=BASE_URL, proxies=PROXIES)
 
         # Filtra palavras-chave negativas
         filtered_keywords = [kw for kw in keywords_list if kw not in negative_keywords_list]

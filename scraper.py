@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 class MarketRoxoScraper:
-    def __init__(self,base_url, log_callback):
+    def __init__(self, log_callback, base_url, proxies=""):
         """Initializes the scraper with the base URL and headers."""
         self.base_url = base_url
         self.headers = {
@@ -13,6 +13,7 @@ class MarketRoxoScraper:
         self.delay = 25 # Seconds between requests
         # Assuming log_callback is already defined
         self.log_callback = log_callback
+        self.proxies = proxies
 
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
@@ -33,7 +34,11 @@ class MarketRoxoScraper:
             self.log_callback(f"Scraping página {page}... {url}")
 
             try:
-                response = requests.get(url, headers=self.headers)
+                # Use proxies if provided
+                if self.proxies != "":
+                    response = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=20)
+                else:
+                    response = requests.get(url, headers=self.headers, timeout=20)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
 

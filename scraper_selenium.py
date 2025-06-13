@@ -20,12 +20,12 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
     the page fetching method to use Selenium instead of requests.
     """
     
-    def __init__(self, base_url, log_callback, use_selenium=True):
+    def __init__(self, base_url, log_callback, proxies="", use_selenium=True):
         """
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
-        super().__init__(base_url, log_callback)
+        super().__init__(base_url, log_callback, proxies)
         
         self.use_selenium = use_selenium
         self.driver = None
@@ -63,6 +63,10 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             chrome_options.add_argument("--disable-gpu")
             
             chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
+            
+            if self.proxies != "":
+                chrome_options.add_argument(f"--proxy-server={self.proxies['http']}")
+                chrome_options.add_argument(f"--proxy-server={self.proxies['https']}")
             
             self.driver = webdriver.Chrome(options=chrome_options)
             

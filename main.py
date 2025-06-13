@@ -85,8 +85,8 @@ class MainApp:
             self.gui.log("✅ Token do Telegram válido!")
             
             scraper = MarketRoxoScraper(
-                base_url=self.base_url,
-                log_callback=self.gui.log  # Pass the log callback to the scraper
+                log_callback=self.gui.log,  # Pass the log callback to the scraper
+                base_url=self.base_url
             )
             
             self.monitor = Monitor(
