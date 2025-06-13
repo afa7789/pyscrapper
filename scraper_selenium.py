@@ -43,7 +43,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self._setup_selenium()
 
     def _setup_selenium(self):
-             """Sets up Chrome WebDriver with stealth options and robust error handling."""
+        """Sets up Chrome WebDriver with stealth options and robust error handling."""
         try:
             chrome_options = Options()
 
