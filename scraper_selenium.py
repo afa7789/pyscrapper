@@ -70,8 +70,8 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
 
             if self.proxies != "":
                 self.log_callback("🔗 Configurando proxies para Selenium..."
-                                 f" HTTP: {self.proxies['http']}, "
-                                 f"HTTPS: {self.proxies['https']}")
+                                 f" HTTP: {self.proxies['http']}, ")
+                                #  f"HTTPS: {self.proxies['https']}")
 
                 chrome_options.add_argument(
                     f"--proxy-server={self.proxies['http']}")
