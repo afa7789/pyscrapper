@@ -5,6 +5,7 @@ import time
 import requests
 import shutil
 import atexit
+import psutil
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -16,7 +17,7 @@ import json
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
-from scraper import MarketRoxoScraper
+from old_Scraper import MarketRoxoScraper
 
 class MarketRoxoScraperSelenium(MarketRoxoScraper):
     """
@@ -30,6 +31,8 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
+        if log_callback is None:
+            raise ValueError("log_callback must be a callable function")
         super().__init__(base_url, log_callback)
         self.use_selenium = use_selenium
         self.driver = None
@@ -59,7 +62,6 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self.log_callback(f"📁 Diretório temporário criado: {self.temp_dir}")
 
             chrome_options = Options()
-            chrome_options.add_argument(f"--user-data-dir={self.temp_dir}")
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
@@ -80,17 +82,15 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                     chrome_options.add_argument(f"--proxy-server={proxy_server}")
                     self.log_callback(f"✅ Proxy configurado: {proxy_server}")
                     if parsed.username and parsed.password:
-                        self.log_callback("⚠️ Aviso: Autenticação de proxy pode precisar de configuração adicional")
+                        self.log_callback("⚠️ Aviso: Autenticação de proxy pode precisar de configuração adicional (e.g., Chrome extension)")
                 else:
                     self.log_callback("❌ Formato de proxy inválido")
                     raise ValueError(f"Formato de proxy inválido: {proxy_url}")
 
             self.log_callback("🔄 Inicializando WebDriver...")
             try:
-                self.driver = webdriver.Chrome(
-                    service=Service(ChromeDriverManager().install()),
-                    options=chrome_options
-                )
+                service = Service(ChromeDriverManager().install(), log_output="chromedriver.log")
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
                 self.log_callback("✅ WebDriver inicializado com sucesso")
                 self.driver.execute_script(
                     "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
@@ -131,6 +131,17 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self.use_selenium = False
             self.driver = None
             raise
+
+    def _terminate_chrome_processes(self):
+        """Terminate any lingering Chrome processes."""
+        try:
+            for proc in psutil.process_iter(['name']):
+                if proc.info['name'] in ['chrome', 'chromedriver']:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                    self.log_callback(f"✅ Terminated process: {proc.info['name']}")
+        except Exception as e:
+            self.log_callback(f"⚠️ Erro ao terminar processos do Chrome: {e}")
 
     def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
         """
@@ -301,6 +312,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
     def close(self):
         """Close the Selenium driver properly."""
         try:
+            self._terminate_chrome_processes()
             if self.driver:
                 try:
                     self.driver.quit()
