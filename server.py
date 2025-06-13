@@ -16,8 +16,10 @@ app = Flask(__name__, template_folder='template')
 # Configuração de logging
 logging.basicConfig(
     filename='app.log',
+    filemode='w',
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname).1s - %(message)s',
+    datefmt='%H:%M:%S'
 )
 logger = logging.getLogger(__name__)
 
