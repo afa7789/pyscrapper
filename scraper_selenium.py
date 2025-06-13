@@ -43,7 +43,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self._setup_selenium()
 
     def _setup_selenium(self):
-        """Sets up Chrome WebDriver with stealth options."""
+        """Sets up Chrome WebDriver with stealth options and proper proxy handling."""
         try:
             chrome_options = Options()
 
@@ -56,8 +56,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                 "--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option(
                 "excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option(
-                'useAutomationExtension', False)
+            chrome_options.add_experimental_option('useAutomationExtension', False)
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--disable-plugins")
             chrome_options.add_argument("--disable-images")
@@ -68,25 +67,50 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             chrome_options.add_argument(
                 f"--user-agent={self.headers['User-Agent']}")
 
-            if self.proxies != "":
-                self.log_callback("🔗 Configurando proxies para Selenium..."
-                                 f" HTTP: {self.proxies['http']}, ")
-                                #  f"HTTPS: {self.proxies['https']}")
+            # Fixed proxy configuration
+            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+                proxy_url = self.proxies['http']
+                self.log_callback(
+                    f"🔗 Configurando proxy para Selenium: {proxy_url}")
 
-                chrome_options.add_argument(
-                    f"--proxy-server={self.proxies['http']}")
-                # chrome_options.add_argument(
-                #     f"--proxy-server={self.proxies['https']}")
+                # Chrome expects proxy format without 'http://' prefix for --proxy-server
+                if proxy_url.startswith('http://'):
+                    proxy_server = proxy_url[7:]  # Remove 'http://' prefix
+                else:
+                    proxy_server = proxy_url
+
+                chrome_options.add_argument(f"--proxy-server={proxy_server}")
+
+                # Additional proxy-related arguments for better compatibility
+                chrome_options.add_argument("--ignore-certificate-errors")
+                chrome_options.add_argument("--ignore-ssl-errors")
+                chrome_options.add_argument("--ignore-certificate-errors-spki")
+
+            elif self.proxies and self.proxies != "":
+                self.log_callback(
+                    f"⚠️ Formato de proxy inválido: {type(self.proxies)} - {self.proxies}")
 
             self.driver = webdriver.Chrome(options=chrome_options)
 
             self.driver.execute_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
+            # Test if proxy is working by checking IP
+            if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+                try:
+                    self.driver.get("https://httpbin.org/ip")
+                    time.sleep(3)
+                    ip_info = self.driver.page_source
+                    self.log_callback(f"🌐 IP atual: {ip_info[:100]}...")
+                except Exception as e:
+                    self.log_callback(f"⚠️ Não foi possível verificar IP: {e}")
+
             self.log_callback("✅ Selenium WebDriver configurado com sucesso.")
 
         except Exception as e:
             self.log_callback(f"⚠️ Erro ao configurar Selenium: {e}")
+            self.log_callback(f"🔍 Debug - Tipo de proxies: {type(self.proxies)}")
+            self.log_callback(f"🔍 Debug - Valor de proxies: {self.proxies}")
             self.use_selenium = False
 
     def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
