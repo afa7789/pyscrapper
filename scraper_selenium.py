@@ -79,9 +79,10 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
 
         try:
             chrome_options = self.setup_minimal()
-            chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+
+            # chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
+            # chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            # chrome_options.add_experimental_option('useAutomationExtension', False)
 
             # --- MODIFIED PROXY HANDLING ---
             configured_proxy_server = None
@@ -109,7 +110,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
 
             self.log_callback("🔄 Inicializando WebDriver...")
             
-            # --- MODIFIED WEBDRIVER INITIALIZATION ---
+            # --- MODIFIED WEBDRIVER INITIALIZATION ---            
             driver_path = ChromeDriverManager().install()
             if not driver_path or not os.path.exists(driver_path):
                 raise RuntimeError(f"ChromeDriver not found or path invalid: {driver_path}")
@@ -121,6 +122,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.log_callback("✅ WebDriver inicializado com sucesso")
 
+            ### 
             self.driver.execute_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
             )
