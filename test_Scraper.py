@@ -22,16 +22,15 @@ if __name__ == "__main__":
 
     print("Initializing scraper...")
     try:
-        with MarketRoxoScraperSelenium(base_url, log_callback, proxies=proxies, use_selenium=False) as scraper:
-            print("Scraper initialized successfully (without Selenium for this test).")
-            print("Attempting to scrape a dummy page using requests fallback...")
-            # This will use the requests fallback, as use_selenium is set to False
-            # You can change use_selenium to True to test Selenium setup if you have a proper environment
-            page_content = scraper._get_page_content_requests(scraper.base_url+"/brasil?q=technogym+spinning+schwinn+indoor+concept2+bike+bicicleta")
-            if page_content:
-                print(f"Successfully retrieved content (first 200 chars):\n{page_content[:200]}...")
+        with MarketRoxoScraperSelenium(base_url, log_callback, proxies=proxies) as scraper:
+            print("Scraper initialized successfully with Selenium.")
+            # Now, call a method that uses Selenium, e.g., the scrape method
+            keywords = ["technogym"]
+            ads = scraper.scrape(keywords, [], max_pages=1)
+            if ads:
+                print(f"Found {len(ads)} ads using Selenium.")
             else:
-                print("Failed to retrieve content.")
+                print("No ads found using Selenium.")
 
     except Exception as e:
         print(f"An error occurred during scraper initialization or operation: {e}")
