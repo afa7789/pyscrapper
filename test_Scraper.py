@@ -8,21 +8,22 @@ def log_callback(message):
 if __name__ == "__main__":
     load_dotenv()
     base_url = os.getenv("BASE_URL", "https://www.olx.com.br")
-    http_proxy = os.getenv("HTTP_PROXY")
-    https_proxy = os.getenv("HTTPS_PROXY")
+    # http_proxy = os.getenv("HTTP_PROXY")
+    # https_proxy = os.getenv("HTTPS_PROXY")
 
-    proxies = {}
-    if http_proxy:
-        proxies["http"] = http_proxy
-    if https_proxy:
-        proxies["https"] = https_proxy
+    # proxies = {}
+    # if http_proxy:
+    #     proxies["http"] = http_proxy
+    # if https_proxy:
+    #     proxies["https"] = https_proxy
 
-    print(f"🔍 Debug - BASE_URL: {base_url}")
-    print(f"🔍 Debug - Proxies: {proxies}")
+    # print(f"🔍 Debug - BASE_URL: {base_url}")
+    # print(f"🔍 Debug - Proxies: {proxies}")
 
     print("Initializing scraper...")
     try:
-        with MarketRoxoScraperSelenium(base_url, log_callback, proxies=proxies) as scraper:
+        # /        with MarketRoxoScraperSelenium(base_url, log_callback, proxies=proxies) as scraper:
+        with MarketRoxoScraperSelenium(base_url, log_callback) as scraper:
             print("✅ Scraper initialized successfully with Selenium.")
             keywords = ["technogym"]
             ads = scraper.scrape(keywords, [], max_pages=1)
