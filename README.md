@@ -91,7 +91,7 @@ export PATH="$PATH:/Users/afa/Library/Python/3.9/bin"
 ```
 
 `find . -type f -name "*.py" -exec wc -l {} + | sort -n | awk '{print $2 ": " $1 " lines"}'`
-total: 810 lines
+total: 1246 lines
 
 example output
 ![alt text](image.png)
