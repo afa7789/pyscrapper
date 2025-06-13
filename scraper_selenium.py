@@ -17,7 +17,7 @@ import json
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 
-from old_Scraper import MarketRoxoScraper
+from scraper import MarketRoxoScraper
 
 class MarketRoxoScraperSelenium(MarketRoxoScraper):
     """
