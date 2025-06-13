@@ -13,9 +13,9 @@
         button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; }
         #startBtn { background-color: #4CAF50; color: white; }
         #stopBtn { background-color: #f44336; color: white; }
-        #logBtn { background-color: #2196F3; color: white; }
-        .status { display: inline-block; margin-left: 10px; font-size: 14px; }
-        #logOutput { margin-top: 20px; padding: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; white-space: pre-wrap; }
+        .status { display: inline-block; margin-left: 10px; font-size: 14px; color: #2196F3; font-weight: bold; }
+        #logOutput { margin-top: 20px; padding: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .log-header { margin-bottom: 10px; font-weight: bold; color: #333; }
     </style>
 </head>
 <body>
@@ -39,9 +39,10 @@
         </div>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
-        <button id="logBtn" onclick="viewLogs()">Ver Logs</button>
-        <span id="autoUpdateStatus" class="status"></span>
-        <pre id="logOutput"></pre>
+        <span id="autoUpdateStatus" class="status">Carregando logs...</span>
+        
+        <div class="log-header">Logs do Sistema (Atualização Automática)</div>
+        <pre id="logOutput">Carregando logs...</pre>
     </div>
     <script>
         let logUpdateInterval = null;
@@ -49,7 +50,7 @@
         // Função para iniciar atualização automática dos logs
         function startAutoUpdate() {
             if (!logUpdateInterval) {
-                logUpdateInterval = setInterval(fetchLogs, 2000);
+                logUpdateInterval = setInterval(fetchLogs, 2000); // Atualiza a cada 2 segundos
                 document.getElementById('autoUpdateStatus').textContent = 'Atualização automática: Ativada';
             }
         }
@@ -63,18 +64,29 @@
             }
         }
 
-        // Função para buscar os logs sem alterar a UI
+        // Função para buscar os logs
         function fetchLogs() {
             fetch('/logs', {
                 headers: {
                     'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
                 }
             })
-            .then(response => response.text())
-            .then(data => {
-                document.getElementById('logOutput').textContent = data;
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar logs: ' + response.status);
+                }
+                return response.text();
             })
-            .catch(error => console.error('Erro ao carregar logs: ' + error));
+            .then(data => {
+                const logOutput = document.getElementById('logOutput');
+                logOutput.textContent = data || 'Nenhum log disponível';
+                // Auto-scroll para o final dos logs
+                logOutput.scrollTop = logOutput.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Erro ao carregar logs:', error);
+                document.getElementById('logOutput').textContent = 'Erro ao carregar logs: ' + error.message;
+            });
         }
 
         function startMonitoring() {
@@ -84,6 +96,7 @@
                 token: document.getElementById('token').value,
                 chat_input: document.getElementById('chatInput').value
             };
+            
             fetch('/start', {
                 method: 'POST',
                 headers: {
@@ -95,10 +108,12 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                // Inicia atualização automática quando monitoramento começa
-                startAutoUpdate();
+                // Os logs já estão sendo atualizados automaticamente
             })
-            .catch(error => alert('Erro ao iniciar monitoramento: ' + error));
+            .catch(error => {
+                console.error('Erro ao iniciar monitoramento:', error);
+                alert('Erro ao iniciar monitoramento: ' + error.message);
+            });
         }
 
         function stopMonitoring() {
@@ -111,25 +126,25 @@
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
-                // Opcional: parar a atualização automática quando o monitoramento para
-                // Remova esta linha se quiser manter a atualização dos logs mesmo após parar o monitoramento
-                stopAutoUpdate();
+                // Os logs continuam sendo atualizados automaticamente
             })
-            .catch(error => alert('Erro ao parar monitoramento: ' + error));
+            .catch(error => {
+                console.error('Erro ao parar monitoramento:', error);
+                alert('Erro ao parar monitoramento: ' + error.message);
+            });
         }
 
-        function viewLogs() {
-            fetchLogs();
-            // Alternar estado da atualização automática ao clicar no botão de logs
-            if (logUpdateInterval) {
-                stopAutoUpdate();
-            } else {
-                startAutoUpdate();
-            }
-        }
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Página carregada, iniciando atualização automática de logs...');
+            fetchLogs(); // Carrega os logs imediatamente
+            startAutoUpdate(); // Inicia a atualização automática
+        });
 
-        // Inicializar status
-        document.getElementById('autoUpdateStatus').textContent = 'Atualização automática: Desativada';
+        // Parar a atualização quando a página for fechada/recarregada
+        window.addEventListener('beforeunload', function() {
+            stopAutoUpdate();
+        });
     </script>
 </body>
 </html>
