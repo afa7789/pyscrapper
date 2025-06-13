@@ -9,20 +9,14 @@
 
 ```bash
 .
-├── main.py           # Entry point (integrates all modules)
-├── gui.py            # Graphical user interface (Tkinter)
-├── monitor.py        # Background monitoring logic
-├── server.py         # Server, to host instead of GUI
-├── scraper.py        # MarketRoxo scraping (BeautifulSoup)
-└── telegram_bot.py   # Sends messages via Telegram
-```
-
-There is also some test python files, that I used to make sure the scrape and telegram python classes were working as:
-
-```bash
-.
-├── tester_scrape.py          
-└── tester_telegram_bot.py   
+├── gui.py              # Graphical user interface (Tkinter)
+├── main.py             # Entry point (integrates all modules)
+├── monitor.py          # Background monitoring logic
+├── requirements.txt    # Requirements to install python packages easier
+├── scraper.py          # MarketRoxo scraping (BeautifulSoup)
+├── scraper_selenium.py # MarketRoxo scraping (BeautifulSoup + Selenium) ( was testing in case it was needed)
+├── server.py           # Server, to host in a VPS instead of GUI locally
+└── telegram_bot.py     # Sends messages via Telegram
 ```
 
 ---
@@ -106,9 +100,9 @@ example output
 ## SERVER VERSION
 
 fill admin values
-```
-pip install flask python-dotenv requests beautifulsoup4
+```bash
+pip install flask python-dotenv requests beautifulsoup4 # missing
 python3 server.py
-```
-
+# in prod:
 gunicorn -w 4 -b 0.0.0.0:5000 server:app
+```
