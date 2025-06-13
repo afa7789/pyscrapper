@@ -43,11 +43,11 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self._setup_selenium()
 
     def _setup_selenium(self):
-        """Sets up Chrome WebDriver with stealth options and robust error handling."""
+             """Sets up Chrome WebDriver with stealth options and robust error handling."""
         try:
             chrome_options = Options()
 
-            # Basic Chrome options
+            # Basic Chrome options (keep these as they are)
             temp_dir = tempfile.mkdtemp(prefix="chrome_profile_")
             chrome_options.add_argument(f"--user-data-dir={temp_dir}")
             chrome_options.add_argument("--no-sandbox")
@@ -58,60 +58,74 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             chrome_options.add_argument("--disable-images")
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--disable-web-security")
+            # Removed redundant --disable-web-security, keeping the other one if necessary for other reasons.
+            # If you don't explicitly need it, you can remove both.
+            # For proxy, typically --ignore-certificate-errors is more relevant.
+            # chrome_options.add_argument("--disable-web-security") # Consider removing if not strictly needed
             chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-            
+
             # Set user agent
             chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
 
-            # Experimental options with error handling
+            # Experimental options (keep as is)
             try:
                 chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
                 chrome_options.add_experimental_option('useAutomationExtension', False)
             except Exception as e:
                 self.log_callback(f"⚠️ Aviso: Erro ao configurar opções experimentais: {e}")
 
-            # Proxy configuration with enhanced error handling
+            # --- PROXY CONFIGURATION FIX ---
             if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+                proxy_full_url = self.proxies['http'] # Store the full URL for logging/debugging
+                self.log_callback(f"🔗 Proxy original fornecido: {proxy_full_url}")
+
                 try:
-                    proxy_url = self.proxies['http']
-                    self.log_callback(f"🔗 Configurando proxy para Selenium: {proxy_url}")
-                    
-                    # Chrome expects proxy format without 'http://' prefix for --proxy-server
-                    if proxy_url.startswith('http://'):
-                        proxy_server = proxy_url[7:]  # Remove 'http://' prefix
+                    # Extract only the host:port part for the --proxy-server argument
+                    # This assumes your IP is whitelisted on the proxy provider's side.
+                    if '@' in proxy_full_url:
+                        # If credentials are present, strip them
+                        proxy_host_port = proxy_full_url.split('@')[-1]
                     else:
-                        proxy_server = proxy_url
-                        
-                    chrome_options.add_argument(f"--proxy-server={proxy_server}")
-                    
-                    # Additional proxy-related arguments
+                        proxy_host_port = proxy_full_url
+
+                    if proxy_host_port.startswith('http://'):
+                        proxy_server_argument = proxy_host_port[7:] # Remove 'http://' prefix
+                    else:
+                        proxy_server_argument = proxy_host_port # Use as is
+
+                    chrome_options.add_argument(f"--proxy-server={proxy_server_argument}")
+
+                    # These arguments are still good to include for proxy usage
                     chrome_options.add_argument("--ignore-certificate-errors")
                     chrome_options.add_argument("--ignore-ssl-errors")
-                    chrome_options.add_argument("--ignore-certificate-errors-spki")
-                    chrome_options.add_argument("--disable-web-security")
                     chrome_options.add_argument("--allow-running-insecure-content")
-                    
-                    self.log_callback(f"✅ Proxy configurado: {proxy_server}")
-                    
+
+                    self.log_callback(f"✅ Proxy configurado para Selenium (esperando IP Whitelist): {proxy_server_argument}")
+
                 except Exception as proxy_error:
-                    self.log_callback(f"⚠️ Erro na configuração do proxy: {proxy_error}")
-                    # Continue without proxy
-            
+                    self.log_callback(f"⚠️ Erro ao processar string do proxy para argumento: {proxy_error}")
+                    # You might want to raise an error here if proxy is critical,
+                    # or set self.use_selenium = False
+
             elif self.proxies and self.proxies != "":
-                self.log_callback(f"⚠️ Formato de proxy inválido: {type(self.proxies)} - {self.proxies}")
+                self.log_callback(f"⚠️ Formato de proxy inválido ou ausente: {type(self.proxies)} - {self.proxies}")
+            # --- END PROXY CONFIGURATION FIX ---
+
 
             # Initialize WebDriver with enhanced error handling
             self.log_callback("🔄 Inicializando WebDriver...")
-            
+
             try:
                 self.driver = webdriver.Chrome(options=chrome_options)
                 self.log_callback("✅ WebDriver inicializado com sucesso")
-            except Exception as driver_error:
-                self.log_callback(f"❌ Erro ao inicializar WebDriver: {driver_error}")
+            except WebDriverException as driver_error:
+                self.log_callback(f"❌ Erro ao inicializar WebDriver (WebDriverException): {driver_error}")
                 raise driver_error
+            except Exception as e:
+                self.log_callback(f"❌ Erro inesperado ao inicializar WebDriver: {e}")
+                raise e
 
-            # Set additional properties
+            # Set additional properties (keep as is)
             try:
                 self.driver.execute_script(
                     "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -119,7 +133,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             except Exception as script_error:
                 self.log_callback(f"⚠️ Aviso: Erro ao executar script anti-detecção: {script_error}")
 
-            # Set timeouts
+            # Set timeouts (keep as is)
             try:
                 self.driver.implicitly_wait(10)
                 self.driver.set_page_load_timeout(120)
@@ -127,23 +141,32 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             except Exception as timeout_error:
                 self.log_callback(f"⚠️ Aviso: Erro ao configurar timeouts: {timeout_error}")
 
-            # Test proxy if configured
+            # Test proxy if configured (adjust test URL for easier IP verification)
             if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
                 try:
                     self.log_callback("🔍 Testando conexão com proxy...")
-                    self.driver.get("https://httpbin.org/ip")
-                    
-                    # Wait for page to load
+                    # Use ipify.org for a simple JSON IP response
+                    self.driver.get("https://api.ipify.org?format=json")
+
+                    # Wait for the body element to be present, indicating the page has loaded
+                    # (Adjusting from httpbin.org/ip to ipify.org which returns JSON directly)
                     WebDriverWait(self.driver, 30).until(
-                        lambda d: d.execute_script("return document.readyState") == "complete"
+                        lambda d: d.find_element(By.TAG_NAME, "body")
                     )
-                    
-                    ip_info = self.driver.page_source
-                    if "origin" in ip_info:
-                        self.log_callback(f"🌐 Teste de IP realizado com sucesso")
-                    else:
-                        self.log_callback("⚠️ Resposta do teste de IP não esperada")
-                        
+
+                    ip_info_json = self.driver.find_element(By.TAG_NAME, "body").text
+                    self.log_callback(f"🌐 Resposta do teste de IP: {ip_info_json}")
+
+                    import json
+                    try:
+                        parsed_ip_info = json.loads(ip_info_json)
+                        if "ip" in parsed_ip_info:
+                            self.log_callback(f"✅ Teste de IP realizado com sucesso. IP via proxy: {parsed_ip_info['ip']}")
+                        else:
+                            self.log_callback("⚠️ Resposta do teste de IP não esperada. Não contém 'ip'.")
+                    except json.JSONDecodeError:
+                         self.log_callback(f"⚠️ Não foi possível decodificar JSON do teste de IP: {ip_info_json}")
+
                 except Exception as test_error:
                     self.log_callback(f"⚠️ Não foi possível testar proxy: {test_error}")
                     # Don't fail the whole setup for proxy test failure
@@ -155,14 +178,14 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self.log_callback(f"🔍 Tipo do erro: {type(e).__name__}")
             self.log_callback(f"🔍 Debug - Tipo de proxies: {type(self.proxies)}")
             self.log_callback(f"🔍 Debug - Valor de proxies: {self.proxies}")
-            
+
             # Try to clean up if driver was partially created
             if hasattr(self, 'driver') and self.driver:
                 try:
                     self.driver.quit()
                 except:
                     pass
-            
+
             self.use_selenium = False
             self.driver = None
 
