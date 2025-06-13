@@ -132,70 +132,70 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
 
         return ads
 
-def _get_page_content_selenium(self, url):
-    """
-    Gets page content using Selenium with retry logic and Cloudflare handling.
-    """
-    if not self.use_selenium or not self.driver:
-        self.log_callback("⚠️ Selenium não configurado. Não é possível obter conteúdo.")
+    def _get_page_content_selenium(self, url):
+        """
+        Gets page content using Selenium with retry logic and Cloudflare handling.
+        """
+        if not self.use_selenium or not self.driver:
+            self.log_callback("⚠️ Selenium não configurado. Não é possível obter conteúdo.")
+            return None
+        
+        max_retries = 10
+        delay_between_retries = 15  # seconds
+        page_load_timeout = 120  # seconds
+        cloudflare_timeout = 45  # seconds
+        
+        for attempt in range(1, max_retries + 1):
+            driver = None
+            try:
+                self.log_callback(f"🔄 Tentativa {attempt}/{max_retries}: Carregando {url}")
+                
+                # Use existing driver or create new one if needed
+                driver = self.driver
+                driver.set_page_load_timeout(page_load_timeout)
+                driver.get(url)
+                
+                # Wait for page to be completely loaded
+                WebDriverWait(driver, page_load_timeout).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
+                
+                # Check for Cloudflare challenge
+                page_source = driver.page_source.lower()
+                if any(s in page_source for s in ["cloudflare", "checking your browser", "cf-browser-verification"]):
+                    self.log_callback("🔒 Detectado desafio Cloudflare. Aguardando resolução...")
+                    
+                    # Wait additional time for Cloudflare
+                    time.sleep(15)
+                    
+                    try:
+                        WebDriverWait(driver, cloudflare_timeout).until(
+                            lambda d: "cloudflare" not in d.page_source.lower()
+                        )
+                        self.log_callback("✅ Desafio Cloudflare resolvido.")
+                    except TimeoutException:
+                        self.log_callback("⏰ Timeout no Cloudflare. Tentando continuar...")
+                
+                # Success - return page source
+                content = driver.page_source
+                self.log_callback(f"✅ Tentativa {attempt}/{max_retries}: Página carregada com sucesso")
+                return content
+                
+            except TimeoutException as e:
+                self.log_callback(f"⏰ Tentativa {attempt}/{max_retries}: Timeout ao carregar {url} - {e}")
+                if attempt < max_retries:
+                    self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
+                    time.sleep(delay_between_retries)
+                
+            except Exception as e:
+                self.log_callback(f"❌ Tentativa {attempt}/{max_retries} falhou com erro: {e}")
+                if attempt < max_retries:
+                    self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
+                    time.sleep(delay_between_retries)
+        
+        # All retries failed
+        self.log_callback(f"❌ Todas as {max_retries} tentativas falharam para {url}")
         return None
-    
-    max_retries = 10
-    delay_between_retries = 15  # seconds
-    page_load_timeout = 120  # seconds
-    cloudflare_timeout = 45  # seconds
-    
-    for attempt in range(1, max_retries + 1):
-        driver = None
-        try:
-            self.log_callback(f"🔄 Tentativa {attempt}/{max_retries}: Carregando {url}")
-            
-            # Use existing driver or create new one if needed
-            driver = self.driver
-            driver.set_page_load_timeout(page_load_timeout)
-            driver.get(url)
-            
-            # Wait for page to be completely loaded
-            WebDriverWait(driver, page_load_timeout).until(
-                lambda d: d.execute_script("return document.readyState") == "complete"
-            )
-            
-            # Check for Cloudflare challenge
-            page_source = driver.page_source.lower()
-            if any(s in page_source for s in ["cloudflare", "checking your browser", "cf-browser-verification"]):
-                self.log_callback("🔒 Detectado desafio Cloudflare. Aguardando resolução...")
-                
-                # Wait additional time for Cloudflare
-                time.sleep(15)
-                
-                try:
-                    WebDriverWait(driver, cloudflare_timeout).until(
-                        lambda d: "cloudflare" not in d.page_source.lower()
-                    )
-                    self.log_callback("✅ Desafio Cloudflare resolvido.")
-                except TimeoutException:
-                    self.log_callback("⏰ Timeout no Cloudflare. Tentando continuar...")
-            
-            # Success - return page source
-            content = driver.page_source
-            self.log_callback(f"✅ Tentativa {attempt}/{max_retries}: Página carregada com sucesso")
-            return content
-            
-        except TimeoutException as e:
-            self.log_callback(f"⏰ Tentativa {attempt}/{max_retries}: Timeout ao carregar {url} - {e}")
-            if attempt < max_retries:
-                self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
-                time.sleep(delay_between_retries)
-            
-        except Exception as e:
-            self.log_callback(f"❌ Tentativa {attempt}/{max_retries} falhou com erro: {e}")
-            if attempt < max_retries:
-                self.log_callback(f"⏳ Aguardando {delay_between_retries}s antes da próxima tentativa...")
-                time.sleep(delay_between_retries)
-    
-    # All retries failed
-    self.log_callback(f"❌ Todas as {max_retries} tentativas falharam para {url}")
-    return None
 
     def _get_page_content_requests(self, url):
         """
