@@ -11,3 +11,4 @@ seen_ads.txt
 MarketRoxoMonitor.spec
 .DS_Store
 app.log
+venv_*
