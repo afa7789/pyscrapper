@@ -108,17 +108,19 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
                         raise ValueError(f"Formato de proxy inválido: {proxy_url}")
 
                 self.log_callback("🔄 Inicializando WebDriver...")
-                service = Service(ChromeDriverManager().install(), log_output="chromedriver.log")
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
-                self.log_callback("✅ WebDriver inicializado com sucesso")
+            
+            service = Service(ChromeDriverManager().install(), log_output="chromedriver.log")
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            self.log_callback("✅ WebDriver inicializado com sucesso")
 
-                # Apply stealth bypass for navigator.webdriver
-                self.driver.execute_script(
-                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-                )
-                self.driver.implicitly_wait(10)
-                self.driver.set_page_load_timeout(120)
+            # Apply stealth bypass for navigator.webdriver
+            self.driver.execute_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+            self.driver.implicitly_wait(10)
+            self.driver.set_page_load_timeout(120)
 
+            if self.selenium_complete_setup: 
                 # Test proxy connection if a non-authenticated proxy was configured
                 if parsed_proxy and not (parsed_proxy.username or parsed_proxy.password):
                     try:
