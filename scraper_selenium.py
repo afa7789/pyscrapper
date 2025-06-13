@@ -41,7 +41,7 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         self.driver = None
         self.temp_dir = None
         self.proxies = proxies or {}
-        self.selenium_complete_setup = False
+        # self.selenium_complete_setup = False # Remove this or set to True if you want the full setup always
 
         self.headers.update({
             "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
@@ -84,30 +84,29 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             # Start with minimal options
             chrome_options = self.setup_minimal()
 
-            if self.selenium_complete_setup: 
-                # Add additional stealth and user-agent options
-                chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
+            # Always add additional stealth and user-agent options when setting up Selenium
+            chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
 
-                # Configure proxy if available and supported
-                parsed_proxy = None
-                if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
-                    proxy_url = self.proxies['http']
-                    self.log_callback(f"🔗 Proxy original fornecido: {proxy_url}")
-                    parsed_proxy = urlparse(proxy_url)
-                    if parsed_proxy.hostname and parsed_proxy.port:
-                        if parsed_proxy.username or parsed_proxy.password:
-                            self.log_callback("⚠️ Proxy com autenticação detectado. Ignorando proxy devido à falta de suporte nativo no Selenium.")
-                        else:
-                            proxy_server = f"{parsed_proxy.scheme}://{parsed_proxy.hostname}:{parsed_proxy.port}"
-                            chrome_options.add_argument(f"--proxy-server={proxy_server}")
-                            self.log_callback(f"✅ Proxy configurado: {proxy_server}")
-                    else:
-                        self.log_callback("❌ Formato de proxy inválido")
-                        raise ValueError(f"Formato de proxy inválido: {proxy_url}")
+            # Configure proxy if available and supported
+            # parsed_proxy = None
+            # if self.proxies and isinstance(self.proxies, dict) and self.proxies.get('http'):
+            #     proxy_url = self.proxies['http']
+            #     self.log_callback(f"🔗 Proxy original fornecido: {proxy_url}")
+            #     parsed_proxy = urlparse(proxy_url)
+            #     if parsed_proxy.hostname and parsed_proxy.port:
+            #         if parsed_proxy.username or parsed_proxy.password:
+            #             self.log_callback("⚠️ Proxy com autenticação detectado. Ignorando proxy devido à falta de suporte nativo no Selenium.")
+            #         else:
+            #             proxy_server = f"{parsed_proxy.scheme}://{parsed_proxy.hostname}:{parsed_proxy.port}"
+            #             chrome_options.add_argument(f"--proxy-server={proxy_server}")
+            #             self.log_callback(f"✅ Proxy configurado: {proxy_server}")
+            #     else:
+            #         self.log_callback("❌ Formato de proxy inválido")
+            #         raise ValueError(f"Formato de proxy inválido: {proxy_url}")
 
-                self.log_callback("🔄 Inicializando WebDriver...")
+            self.log_callback("🔄 Inicializando WebDriver...")
             
             service = Service(ChromeDriverManager().install(), log_output="chromedriver.log")
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -120,25 +119,24 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
             self.driver.implicitly_wait(10)
             self.driver.set_page_load_timeout(120)
 
-            if self.selenium_complete_setup: 
-                # Test proxy connection if a non-authenticated proxy was configured
-                if parsed_proxy and not (parsed_proxy.username or parsed_proxy.password):
-                    try:
-                        self.log_callback("🔍 Testando conexão com proxy...")
-                        self.driver.get("https://api.ipify.org?format=json")
-                        WebDriverWait(self.driver, 30).until(
-                            lambda d: d.find_element(By.TAG_NAME, "body")
-                        )
-                        ip_info_text = self.driver.find_element(By.TAG_NAME, "body").text
-                        self.log_callback(f"🌐 Resposta do teste de IP: {ip_info_text}")
-                        ip_info_json = json.loads(ip_info_text)
-                        if "ip" in ip_info_json:
-                            self.log_callback(f"✅ Teste de IP realizado com sucesso. IP: {ip_info_json['ip']}")
-                        else:
-                            self.log_callback("⚠️ Resposta do teste de IP não esperada")
-                    except Exception as e:
-                        self.log_callback(f"⚠️ Não foi possível testar proxy: {str(e)}")
-                self.log_callback("✅ Selenium WebDriver configurado completamente.")
+            # # Test proxy connection if a non-authenticated proxy was configured
+            # if parsed_proxy and not (parsed_proxy.username or parsed_proxy.password):
+            #     try:
+            #         self.log_callback("🔍 Testando conexão com proxy...")
+            #         self.driver.get("https://api.ipify.org?format=json")
+            #         WebDriverWait(self.driver, 30).until(
+            #             lambda d: d.find_element(By.TAG_NAME, "body")
+            #         )
+            #         ip_info_text = self.driver.find_element(By.TAG_NAME, "body").text
+            #         self.log_callback(f"🌐 Resposta do teste de IP: {ip_info_text}")
+            #         ip_info_json = json.loads(ip_info_text)
+            #         if "ip" in ip_info_json:
+            #             self.log_callback(f"✅ Teste de IP realizado com sucesso. IP: {ip_info_json['ip']}")
+            #         else:
+            #             self.log_callback("⚠️ Resposta do teste de IP não esperada")
+            #     except Exception as e:
+            #         self.log_callback(f"⚠️ Não foi possível testar proxy: {str(e)}")
+            self.log_callback("✅ Selenium WebDriver configurado completamente.")
 
         except WebDriverException as e:
             self.log_callback(f"❌ Erro ao inicializar WebDriver: {str(e)}")
