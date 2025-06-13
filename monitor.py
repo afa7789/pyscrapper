@@ -104,7 +104,11 @@ class Monitor:
                     self.log_callback("ℹ️ Nenhum anúncio novo encontrado")
             except Exception as e:
                 self.log_callback(f"❌ Erro durante verificação: {str(e)}")
-            seconds_to_wait = 15 * 60  # 15 minutes
+
+            seconds_in_minute = 60
+            minutes_to_wait = 30
+            seconds_to_wait = minutes_to_wait * seconds_in_minute  # 15 minutes
+            
             # seconds_to_wait = 15  # 15 seconds
             # Wait with countdown
             if self.running:
