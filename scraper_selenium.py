@@ -31,9 +31,9 @@ class MarketRoxoScraperSelenium(MarketRoxoScraper):
         Initialize the Selenium scraper by calling parent constructor
         and adding Selenium-specific setup.
         """
-        if not callable(log_callback):
-            raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
-        self.log_callback(f"🔍 Debug: MarketRoxoScraperSelenium received log_callback={log_callback}")
+        # if not callable(log_callback):
+        #     raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
+        # self.log_callback(f"🔍 Debug: MarketRoxoScraperSelenium received log_callback={log_callback}")
         super().__init__(log_callback, base_url, proxies)
         self.log_callback(f"🔍 Debug: After super().__init__, self.log_callback={self.log_callback}")
         self.use_selenium = use_selenium
