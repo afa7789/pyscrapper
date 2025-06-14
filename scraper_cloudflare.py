@@ -298,7 +298,7 @@ class MarketRoxoScraperCloudflare:
                 if match_positive and not match_negative:
                     full_url = urljoin(self.base_url, ad_url)
                     ads.append({"title": ad_title, "url": full_url})
-                    log_cb(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
+                    # log_cb(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
                     # Log to secondary file
                     # self._log_found_ad_to_file(page_url, ad_title, full_url)
                 else:
