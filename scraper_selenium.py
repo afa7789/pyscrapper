@@ -220,7 +220,6 @@ if __name__ == "__main__":
     with MarketRoxoScraperSelenium(
         base_url="https://www.olx.com.br",
         log_callback=log_callback,
-        headless=True,  # Set to False to see browser window
         proxy=None  # Set proxy if needed: "http://proxy:port"
     ) as scraper:
         
