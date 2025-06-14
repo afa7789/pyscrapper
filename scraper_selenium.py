@@ -13,7 +13,7 @@ from selenium.webdriver.chrome.service import Service
 # from scraper import MarketRoxoScraper
 
 class MarketRoxoScraperSelenium:
-    def __init__(self, log_callback, base_url, headless=True, chrome_driver_path=None, proxy=None):
+    def __init__(self, base_url, log_callback, chrome_driver_path=None, proxy=None):
         """Initializes the Selenium scraper with the base URL and browser options."""
         if not callable(log_callback):
             raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
@@ -22,7 +22,7 @@ class MarketRoxoScraperSelenium:
         self.delay = 25
         self.log_callback = log_callback
         self.driver = None
-        self.headless = headless
+        self.headless = True
         self.chrome_driver_path = chrome_driver_path
         self.proxy = proxy
         
@@ -210,3 +210,32 @@ class MarketRoxoScraperSelenium:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
+
+# Example usage:
+if __name__ == "__main__":
+    def log_callback(message):
+        print(f"[LOG] {message}")
+    
+    # Using as context manager (recommended)
+    with MarketRoxoScraperSelenium(
+        base_url="https://www.olx.com.br",
+        log_callback=log_callback,
+        headless=True,  # Set to False to see browser window
+        proxy=None  # Set proxy if needed: "http://proxy:port"
+    ) as scraper:
+        
+        keywords = ["iphone", "smartphone"]
+        negative_keywords = ["quebrado", "defeito"]
+        
+        ads = scraper.scrape(
+            keywords=keywords,
+            negative_keywords_list=negative_keywords,
+            max_pages=3,
+            save_page=False
+        )
+        
+        print(f"Total ads found: {len(ads)}")
+        for ad in ads[:5]:  # Show first 5 ads
+            print(f"Title: {ad['title']}")
+            print(f"URL: {ad['url']}")
+            print("-" * 50)
