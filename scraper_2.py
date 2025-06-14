@@ -106,11 +106,12 @@ class MarketRoxoScraper2:
                 # Configura o scraper com novos headers
                 self.scraper.headers.update(headers)
                 
-                # Usa proxy se disponível
-                if self.proxies:
-                    response = self.scraper.get(url, proxies=self.proxies, timeout=30)
-                else:
-                    response = self.scraper.get(url, timeout=30)
+                # # Usa proxy se disponível
+                # if self.proxies:
+                #     response = self.scraper.get(url, proxies=self.proxies, timeout=30)
+                # else:
+                    # response = self.scraper.get(url, timeout=30)
+                response = self.scraper.get(url, timeout=30)
                 
                 response.raise_for_status()
                 
