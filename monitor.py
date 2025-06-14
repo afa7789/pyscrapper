@@ -66,13 +66,47 @@ class Monitor:
         self.log_callback("🚀 Monitoramento iniciado!")
         self.log_callback(f"📝 Palavras-chave: {', '.join(self.keywords)}")
         self.log_callback(f"💬 Chat ID: {self.chat_id}")
+        self.log_callback("⏰ Horário de funcionamento: 06:00 - 23:00 (GMT-3)")
         cycle_count = 0
         while self.running:
             try:
+                # Check if current time is within allowed hours (6:00 - 23:00 GMT-3)
+                from datetime import timezone, timedelta
+                gmt_minus_3 = timezone(timedelta(hours=-3))
+                current_time_gmt3 = datetime.now(gmt_minus_3)
+                current_hour = current_time_gmt3.hour
+                
+                if current_hour < 6 or current_hour >= 23:
+                    current_time_str = current_time_gmt3.strftime("%H:%M:%S")
+                    self.log_callback(f"😴 Fora do horário de funcionamento - {current_time_str} (GMT-3)")
+                    self.log_callback("⏰ Próxima verificação será às 06:00")
+                    
+                    # Calculate seconds until 6:00 AM
+                    if current_hour >= 23:
+                        # After 23:00, wait until 6:00 next day
+                        next_6am = current_time_gmt3.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    else:
+                        # Before 6:00, wait until 6:00 same day
+                        next_6am = current_time_gmt3.replace(hour=6, minute=0, second=0, microsecond=0)
+                    
+                    seconds_until_6am = int((next_6am - current_time_gmt3).total_seconds())
+                    
+                    # Wait until 6:00 AM with periodic status updates
+                    for i in range(0, seconds_until_6am, 300):  # Check every 5 minutes
+                        if not self.running:
+                            break
+                        remaining = seconds_until_6am - i
+                        hours_remaining = remaining // 3600
+                        minutes_remaining = (remaining % 3600) // 60
+                        self.log_callback(f"💤 Aguardando horário de funcionamento - {hours_remaining:02d}:{minutes_remaining:02d} restantes")
+                        time.sleep(min(300, remaining))
+                    
+                    continue  # Skip to next iteration to check time again
+
                 cycle_count += 1
-                current_time = datetime.now().strftime("%H:%M:%S")
+                current_time = current_time_gmt3.strftime("%H:%M:%S")
                 self.log_callback(
-                    f"🔍 Verificação #{cycle_count} - {current_time}")
+                    f"🔍 Verificação #{cycle_count} - {current_time} (GMT-3)")
 
                 #  when we add multiple scrapers, we can loop through them
                 #  and scrape each adding the results to new_ads
@@ -118,7 +152,7 @@ class Monitor:
 
             seconds_in_minute = 60
             minutes_to_wait = 30
-            seconds_to_wait = minutes_to_wait * seconds_in_minute  # 15 minutes
+            seconds_to_wait = minutes_to_wait * seconds_in_minute  # 30 minutes
 
             # seconds_to_wait = 15  # 15 seconds
             # Wait with countdown
