@@ -15,7 +15,7 @@ class MarketRoxoScraper2:
         
         self.base_url = base_url
         self.log_callback = log_callback
-        self.proxies = self._setup_proxies(proxies)
+        # self.proxies = self._setup_proxies(proxies)
         
         # Inicializa o cloudscraper que bypassa Cloudflare automaticamente
         self.scraper = cloudscraper.create_scraper(
@@ -36,27 +36,27 @@ class MarketRoxoScraper2:
         
         self.log_callback(f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
 
-    def _setup_proxies(self, proxies):
-        """Configura proxies se fornecidos"""
-        if proxies and proxies != "":
-            if isinstance(proxies, str):
-                # Assume formato "user:pass@ip:port" ou "ip:port"
-                if '@' in proxies:
-                    auth, server = proxies.split('@')
-                    username, password = auth.split(':')
-                    ip, port = server.split(':')
-                    return {
-                        'http': f'http://{username}:{password}@{ip}:{port}',
-                        'https': f'http://{username}:{password}@{ip}:{port}'
-                    }
-                else:
-                    ip, port = proxies.split(':')
-                    return {
-                        'http': f'http://{ip}:{port}',
-                        'https': f'http://{ip}:{port}'
-                    }
-            return proxies
-        return None
+    # def _setup_proxies(self, proxies):
+    #     """Configura proxies se fornecidos"""
+    #     if proxies and proxies != "":
+    #         if isinstance(proxies, str):
+    #             # Assume formato "user:pass@ip:port" ou "ip:port"
+    #             if '@' in proxies:
+    #                 auth, server = proxies.split('@')
+    #                 username, password = auth.split(':')
+    #                 ip, port = server.split(':')
+    #                 return {
+    #                     'http': f'http://{username}:{password}@{ip}:{port}',
+    #                     'https': f'http://{username}:{password}@{ip}:{port}'
+    #                 }
+    #             else:
+    #                 ip, port = proxies.split(':')
+    #                 return {
+    #                     'http': f'http://{ip}:{port}',
+    #                     'https': f'http://{ip}:{port}'
+    #                 }
+    #         return proxies
+    #     return None
 
     def _setup_headers(self):
         """Configura headers realistas para evitar detecção"""
