@@ -249,11 +249,11 @@ class MarketRoxoScraperCloudflare:
                 # Increment counters based on matches
                 if match_positive:
                     positive_matches_count += 1
-                    self.log_callback(f"✅ Título '{ad_title}' corresponde a uma palavra-chave positiva.")
+                    # self.log_callback(f"✅ Título '{ad_title}' corresponde a uma palavra-chave positiva.")
                 
                 if match_negative:
                     negative_matches_count += 1
-                    self.log_callback(f"❌ Título '{ad_title}' corresponde a uma palavra-chave negativa.")
+                    # self.log_callback(f"❌ Título '{ad_title}' corresponde a uma palavra-chave negativa.")
 
                 if match_positive and not match_negative:
                     full_url = urljoin(self.base_url, ad_url)
