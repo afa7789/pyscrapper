@@ -33,19 +33,26 @@ class MarketRoxoScraperSelenium:
         """Sets up the Chrome WebDriver with appropriate options."""
         chrome_options = Options()
         
-        # Basic options
+        # Basic options for stability
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+        
+        # Anti-detection (simplified for compatibility)
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        # User agent
-        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.103 Safari/537.36")
+        # User agent matching your Chrome version
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
         
         # Headless mode
         if self.headless:
-            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--headless=new")  # Use new headless mode
+            chrome_options.add_argument("--disable-gpu")
         
         # Proxy configuration
         if self.proxy:
@@ -53,26 +60,51 @@ class MarketRoxoScraperSelenium:
         
         # Performance optimizations
         chrome_options.add_argument("--disable-images")
-        chrome_options.add_argument("--disable-javascript")  # May need to remove if site requires JS
         chrome_options.add_argument("--disable-plugins")
         chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-dev-tools")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--disable-default-apps")
+        
+        # Memory and performance
+        chrome_options.add_argument("--memory-pressure-off")
+        chrome_options.add_argument("--max_old_space_size=4096")
+        
+        # Set window size for headless mode
+        chrome_options.add_argument("--window-size=1920,1080")
         
         try:
+            # Try different approaches to initialize the driver
+            self.log_callback("🔧 Attempting to initialize Chrome WebDriver...")
+            
             if self.chrome_driver_path:
                 service = Service(self.chrome_driver_path)
                 self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                self.log_callback(f"✅ Using custom ChromeDriver: {self.chrome_driver_path}")
             else:
-                # Assumes chromedriver is in PATH
+                # Try to use system chromedriver
                 self.driver = webdriver.Chrome(options=chrome_options)
+                self.log_callback("✅ Using system ChromeDriver")
             
-            # Execute script to remove webdriver property
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            # Set timeouts
+            self.driver.implicitly_wait(10)
+            self.driver.set_page_load_timeout(30)
+            
+            # Execute script to remove webdriver property (if possible)
+            try:
+                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            except:
+                pass  # Ignore if this fails
             
             self.log_callback("✅ Chrome WebDriver initialized successfully")
             
         except Exception as e:
             self.log_callback(f"❌ Error initializing WebDriver: {e}")
-            raise
+            self.log_callback("💡 Suggestions:")
+            self.log_callback("   1. Update ChromeDriver to match your Chrome version")
+            self.log_callback("   2. Try: sudo apt update && sudo apt install chromium-chromedriver")
+            self.log_callback("   3. Or download ChromeDriver manually from https://chromedriver.chromium.org/")
+            raise RuntimeError(f"Failed to initialize WebDriver: {e}")
 
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
