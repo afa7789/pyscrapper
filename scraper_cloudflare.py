@@ -186,6 +186,17 @@ class MarketRoxoScraperCloudflare:
         self.log_callback(f"🎯 Total de anúncios encontrados: {len(ads)}")
         return ads
 
+    def _log_found_ad_to_file(self, page_url, ad_title, ad_url):
+        """Logs found ads to a secondary file."""
+        try:
+            with open("found_ads.log", "a", encoding="utf-8") as f:
+                f.write(f"Página: {page_url}\n")
+                f.write(f"Título do Anúncio: {ad_title}\n")
+                f.write(f"Link do Anúncio: {ad_url}\n")
+                f.write("-" * 50 + "\n") # Separator for readability
+        except Exception as e:
+            self.log_callback(f"❌ Erro ao escrever no arquivo found_ads.log: {e}")
+
     def _extract_ads_tested(self, filename, keywords, negative_keywords_list=None):
         """Extracts ads from an HTML file by parsing its soup."""
         with open(filename, "r", encoding="utf-8") as file:
@@ -203,17 +214,18 @@ class MarketRoxoScraperCloudflare:
             page_url (str, optional): The URL of the page being scraped. Defaults to "".
         """
         # in case I want to change this function to reduce number of logs
-        log_cb = self.log_callback
+        # log_cb = self.log_callback
         ads = []
         
         # Initialize counters for logging
         positive_matches_count = 0
         negative_matches_count = 0
+        not_valid_or_invalid_count = 0
 
         # Log keywords being used
-        log_cb(f"🔑 Palavras-chave positivas sendo usadas: {keywords}")
-        log_cb(f"🚫 Palavras-chave negativas sendo usadas: {negative_keywords_list}")
-        log_cb(f"🌐 URL da página sendo processada: {page_url}")
+        # log_cb(f"🔑 Palavras-chave positivas sendo usadas: {keywords}")
+        # log_cb(f"🚫 Palavras-chave negativas sendo usadas: {negative_keywords_list}")
+        # log_cb(f"🌐 URL da página sendo processada: {page_url}")
         
         # Tenta diferentes seletores do OLX
         selectors = [
@@ -229,17 +241,17 @@ class MarketRoxoScraperCloudflare:
             links = soup.select(selector)
             if links:
                 found_links = links
-                log_cb(f"🔍 Usando seletor: {selector} ({len(links)} links)")
+                # log_cb(f"🔍 Usando seletor: {selector} ({len(links)} links)")
                 break
         
         if not found_links:
-            log_cb("⚠️ Nenhum link de anúncio encontrado com os seletores conhecidos")
+            self.log_callback("⚠️ Nenhum link de anúncio encontrado com os seletores conhecidos")
             # Debug: salva a página para análise
             with open("debug_no_ads.html", "w", encoding="utf-8") as f:
                 f.write(str(soup))
             return ads
         
-        log_cb(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
+        # self.log_callback(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
 
         for i, link in enumerate(found_links):
             ad_url = link.get("href")
@@ -256,26 +268,31 @@ class MarketRoxoScraperCloudflare:
             has_ad_url = bool(ad_url)
             has_ad_title = bool(ad_title)
             
-            log_cb(f"--- Processando link {i+1}/{len(found_links)} ---")
-            log_cb(f"URL do anúncio: {ad_url}")
-            log_cb(f"Título do anúncio (processado): '{ad_title}'")
+            # log_cb(f"--- Processando link {i+1}/{len(found_links)} ---")
+            # log_cb(f"URL do anúncio: {ad_url}")
+            # log_cb(f"Título do anúncio (processado): '{ad_title}'")
 
             if has_ad_url and has_ad_title:
+                self._log_found_ad_to_file(
+                    page_url, 
+                    ad_title,
+                    ad_url
+                )
                 match_positive = any(keyword.lower() in ad_title for keyword in keywords)
                 match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
                 
                 # Increment counters based on matches
                 if match_positive:
                     positive_matches_count += 1
-                    log_cb(f"✅ Título '{ad_title}' CORRESPONDE a uma palavra-chave POSITIVA.")
-                else:
-                    log_cb(f"❌ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave POSITIVA.")
+                #     log_cb(f"✅ Título '{ad_title}' CORRESPONDE a uma palavra-chave POSITIVA.")
+                # else:
+                #     log_cb(f"❌ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave POSITIVA.")
                 
                 if match_negative:
                     negative_matches_count += 1
-                    log_cb(f"❌ Título '{ad_title}' CORRESPONDE a uma palavra-chave NEGATIVA.")
-                else:
-                    log_cb(f"✅ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave NEGATIVA.")
+                #     log_cb(f"❌ Título '{ad_title}' CORRESPONDE a uma palavra-chave NEGATIVA.")
+                # else:
+                #     log_cb(f"✅ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave NEGATIVA.")
 
 
                 if match_positive and not match_negative:
@@ -283,21 +300,23 @@ class MarketRoxoScraperCloudflare:
                     ads.append({"title": ad_title, "url": full_url})
                     log_cb(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
                     # Log to secondary file
-                    self._log_found_ad_to_file(page_url, ad_title, full_url)
+                    # self._log_found_ad_to_file(page_url, ad_title, full_url)
                 else:
-                    log_cb(f"🚫 Anúncio IGNORADO (não atendeu aos critérios de correspondência positiva e/ou negativa).")
+                    not_valid_or_invalid_count += 1
+                #     self.log_callback(f"🚫 Anúncio IGNORADO (não atendeu aos critérios de correspondência positiva e/ou negativa).")
             else:
                 if not has_ad_url:
-                    log_cb(f"⚠️ Link sem URL: {link.prettify().strip()}")
+                    self.log_callback(f"⚠️ Link sem URL: {link.prettify().strip()}")
                 if not has_ad_title:
-                    log_cb(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
-            log_cb(f"---------------------------------------------")
+                    self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
+            # log_cb(f"---------------------------------------------")
 
 
         # Log the final counts
-        log_cb(f"📊 Resumo da extração: {len(ads)} anúncios válidos encontrados.")
-        log_cb(f"👍 Total de títulos com palavras-chave positivas: {positive_matches_count}")
-        log_cb(f"👎 Total de títulos com palavras-chave negativas: {negative_matches_count}")
+        self.log_callback(f"📊 Resumo da extração: {len(ads)} anúncios válidos encontrados.")
+        self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches_count}")
+        self.log_callback(f"👎 Total de títulos com palavras-chave negativas: {negative_matches_count}")
+        self.log_callback(f"🚫 Total de anúncios não válidos ou inválidos: {not_valid_or_invalid_count}")
         
         return ads
 
