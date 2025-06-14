@@ -134,4 +134,81 @@ def download_chromedriver(version, install_path="/usr/local/bin/chromedriver"):
             return False
             
     except Exception as e:
-        print(f"Error downloadi
+        print(f"Error downloading ChromeDriver: {e}")
+        return False
+
+def main():
+    print("🔍 Chrome/ChromeDriver Diagnostic Tool")
+    print("=" * 50)
+    
+    # Check Chrome version
+    chrome_version = get_chrome_version()
+    if chrome_version:
+        print(f"✅ Chrome found: {chrome_version}")
+        # Extract version number
+        chrome_num = chrome_version.split()[-1] if chrome_version else "unknown"
+    else:
+        print("❌ Chrome not found!")
+        print("Install Chrome: sudo apt update && sudo apt install google-chrome-stable")
+        return
+    
+    # Check ChromeDriver version
+    chromedriver_version = get_chromedriver_version()
+    chromedriver_path = find_chromedriver_path()
+    
+    if chromedriver_version:
+        print(f"✅ ChromeDriver found: {chromedriver_version}")
+        print(f"📍 Path: {chromedriver_path}")
+    else:
+        print("❌ ChromeDriver not found!")
+    
+    # Check compatibility
+    if chrome_version and chromedriver_version:
+        chrome_major = chrome_num.split('.')[0]
+        driver_major = chromedriver_version.split()[1].split('.')[0] if 'ChromeDriver' in chromedriver_version else chromedriver_version.split('.')[0]
+        
+        if chrome_major == driver_major:
+            print("✅ Versions are compatible!")
+        else:
+            print(f"❌ Version mismatch detected!")
+            print(f"   Chrome major version: {chrome_major}")
+            print(f"   ChromeDriver major version: {driver_major}")
+            
+            # Get compatible version
+            compatible_version = get_compatible_chromedriver_version(chrome_major)
+            if compatible_version:
+                print(f"💡 Compatible ChromeDriver version: {compatible_version}")
+                
+                answer = input("\nDo you want to download and install the compatible version? (y/n): ")
+                if answer.lower() == 'y':
+                    if download_chromedriver(compatible_version):
+                        print("✅ ChromeDriver updated successfully!")
+                    else:
+                        print("❌ Failed to update ChromeDriver")
+            else:
+                print("❌ Could not determine compatible version")
+    
+    print("\n🛠️  Manual Installation Commands:")
+    print("=" * 50)
+    
+    if chrome_version:
+        chrome_major = chrome_num.split('.')[0]
+        print(f"# For Chrome {chrome_major}.x:")
+        print(f"wget -O /tmp/chromedriver.zip 'https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{chrome_major}'")
+        print("cd /tmp")
+        print("unzip chromedriver.zip")
+        print("sudo cp chromedriver /usr/local/bin/")
+        print("sudo chmod +x /usr/local/bin/chromedriver")
+        print("rm -rf chromedriver*")
+    
+    print("\n# Alternative: Use system package manager:")
+    print("sudo apt update")
+    print("sudo apt remove chromium-chromedriver")  # Remove old version
+    print("sudo apt install chromium-chromedriver")
+    
+    print("\n# Test the installation:")
+    print("chromedriver --version")
+    print("google-chrome --version")
+
+if __name__ == "__main__":
+    main()
