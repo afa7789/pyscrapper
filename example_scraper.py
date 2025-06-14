@@ -41,7 +41,7 @@ def main():
     save_page = False
     
     # Inicializa o scraper
-    scraper = MarketRoxoScraper(
+    scraper = MarketRoxoScraper2(
         log_callback=log_callback,
         base_url=base_url,
         proxies=proxy_config
