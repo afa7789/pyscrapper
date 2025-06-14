@@ -5,7 +5,7 @@
 Exemplo de uso do MarketRoxoScraper2 com bypass Cloudflare
 """
 
-from scraper_2 import MarketRoxoScraper2
+from scraper_cloudflare import MarketRoxoScraperCloudflare
 import json
 import os
 from dotenv import load_dotenv
@@ -41,7 +41,7 @@ def main():
     save_page = False
     
     # Inicializa o scraper
-    scraper = MarketRoxoScraper2(
+    scraper = MarketRoxoScraperCloudflare(
         log_callback=log_callback,
         base_url=base_url,
         proxies=proxy_config
