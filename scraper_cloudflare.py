@@ -7,7 +7,7 @@ import cloudscraper
 from fake_useragent import UserAgent
 import json
 
-class MarketRoxoScraper2:
+class MarketRoxoScraperCloudflare:
     def __init__(self, log_callback, base_url, proxies=""):
         """Initializes the scraper with the base URL and headers."""
         if not callable(log_callback):

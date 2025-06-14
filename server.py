@@ -7,7 +7,7 @@ import json
 import base64
 from threading import Thread
 from monitor import Monitor
-from selenium_scraper_auto import MarketRoxoScraperSeleniumAuto  # Mudança aqui
+from scraper_cloudflare import MarketRoxoScraperCloudflare  # Mudança aqui
 from telegram_bot import TelegramBot
 # import pdb  # Import pdb at the top of server.py
 
@@ -147,12 +147,10 @@ def start():
         
         # Usar o scraper automático com gestão de drivers
         proxy = PROXIES.get("http") or PROXIES.get("https") or None
-        scraper = MarketRoxoScraperSeleniumAuto(
+        scraper = MarketRoxoScraperCloudflare(
             log_callback=logger.info, 
             base_url=BASE_URL, 
             proxy=proxy,
-            headless=True,
-            use_webdriver_manager=True
         )
 
         # Filtra palavras-chave negativas
