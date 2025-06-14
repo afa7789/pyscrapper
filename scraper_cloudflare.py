@@ -88,7 +88,7 @@ class MarketRoxoScraperCloudflare:
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
         unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
-        query = " ".join(unique_keywords)
+        query = "+".join(unique_keywords)
         return query
 
     def _random_delay(self):
@@ -214,7 +214,6 @@ class MarketRoxoScraperCloudflare:
             page_url (str, optional): The URL of the page being scraped. Defaults to "".
         """
         # in case I want to change this function to reduce number of logs
-        # log_cb = self.log_callback
         ads = []
         
         # Initialize counters for logging
@@ -223,9 +222,6 @@ class MarketRoxoScraperCloudflare:
         not_valid_or_invalid_count = 0
 
         # Log keywords being used
-        # log_cb(f"🔑 Palavras-chave positivas sendo usadas: {keywords}")
-        # log_cb(f"🚫 Palavras-chave negativas sendo usadas: {negative_keywords_list}")
-        # log_cb(f"🌐 URL da página sendo processada: {page_url}")
         
         # Tenta diferentes seletores do OLX
         selectors = [
@@ -310,8 +306,6 @@ class MarketRoxoScraperCloudflare:
                 if not has_ad_title:
                     self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
             # log_cb(f"---------------------------------------------")
-
-
         # Log the final counts
         self.log_callback(f"📊 Resumo da extração: {len(ads)} anúncios válidos encontrados.")
         self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches_count}")
