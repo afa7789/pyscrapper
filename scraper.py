@@ -20,7 +20,7 @@ class MarketRoxoScraper:
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
         unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
-        query = "+".join(unique_keywords)
+        query = " ".join(unique_keywords)
         return query
 
     def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
