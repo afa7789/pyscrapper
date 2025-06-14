@@ -7,7 +7,7 @@ import json
 import base64
 from threading import Thread
 from monitor import Monitor
-from scraper_selenium import MarketRoxoScraperSelenium
+from selenium_scraper_auto import MarketRoxoScraperSeleniumAuto  # Mudança aqui
 from telegram_bot import TelegramBot
 # import pdb  # Import pdb at the top of server.py
 
@@ -144,8 +144,16 @@ def start():
 
         # Configura o TelegramBot e Scraper
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
-        scraper = MarketRoxoScraperSelenium(
-            log_callback=logger.info, base_url=BASE_URL, proxies=PROXIES)
+        
+        # Usar o scraper automático com gestão de drivers
+        proxy = PROXIES.get("http") or PROXIES.get("https") or None
+        scraper = MarketRoxoScraperSeleniumAuto(
+            log_callback=logger.info, 
+            base_url=BASE_URL, 
+            proxy=proxy,
+            headless=True,
+            use_webdriver_manager=True
+        )
 
         # Filtra palavras-chave negativas
         filtered_keywords = [
