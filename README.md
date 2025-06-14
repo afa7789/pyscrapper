@@ -9,14 +9,14 @@
 
 ```bash
 .
-├── gui.py              # Graphical user interface (Tkinter)
-├── main.py             # Entry point (integrates all modules)
-├── monitor.py          # Background monitoring logic
-├── requirements.txt    # Requirements to install python packages easier
-├── scraper.py          # MarketRoxo scraping (BeautifulSoup)
-├── scraper_selenium.py # MarketRoxo scraping (BeautifulSoup + Selenium) ( was testing in case it was needed)
-├── server.py           # Server, to host in a VPS instead of GUI locally
-└── telegram_bot.py     # Sends messages via Telegram
+├── gui.py                 # Graphical user interface (Tkinter)
+├── main.py                # Entry point (integrates all modules)
+├── monitor.py             # Background monitoring logic
+├── requirements.txt       # Requirements to install python packages easier
+├── scraper.py             # MarketRoxo scraping .
+├── scraper_cloudflare.py  # Scraping but cloudflare does not block me.
+├── server.py              # Server, to host in a VPS instead of GUI locally
+└── telegram_bot.py        # Sends messages via Telegram
 ```
 
 ---
@@ -91,7 +91,7 @@ export PATH="$PATH:/Users/afa/Library/Python/3.9/bin"
 ```
 
 `find . -type f -name "*.py" -exec wc -l {} + | sort -n | awk '{print $2 ": " $1 " lines"}'`
-total: 1246 lines
+total: 1478 lines
 
 example output
 ![alt text](image.png)
