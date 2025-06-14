@@ -235,7 +235,7 @@ class MarketRoxoScraperCloudflare:
                 link.get("title") or 
                 link.get("aria-label") or 
                 (link.find("h2") and link.find("h2").get_text(strip=True)) or
-                (link.find("span") and link.find("span').get_text(strip=True)) or
+                (link.find("span") and link.find("span").get_text(strip=True)) or
                 ""
             ).lower()
             
