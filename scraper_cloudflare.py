@@ -197,6 +197,10 @@ class MarketRoxoScraperCloudflare:
         """Extracts ads from an HTML page."""
         ads = []
         
+        # Initialize counters for logging
+        positive_matches_count = 0
+        negative_matches_count = 0
+        
         # Tenta diferentes seletores do OLX
         selectors = [
             "a[data-testid='ad-card-link']",  # Novo seletor OLX
@@ -221,6 +225,8 @@ class MarketRoxoScraperCloudflare:
                 f.write(str(soup))
             return ads
         
+        self.log_callback(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
+
         for link in found_links:
             ad_url = link.get("href")
             
@@ -229,7 +235,7 @@ class MarketRoxoScraperCloudflare:
                 link.get("title") or 
                 link.get("aria-label") or 
                 (link.find("h2") and link.find("h2").get_text(strip=True)) or
-                (link.find("span") and link.find("span").get_text(strip=True)) or
+                (link.find("span") and link.find("span').get_text(strip=True)) or
                 ""
             ).lower()
             
@@ -240,9 +246,28 @@ class MarketRoxoScraperCloudflare:
                 match_positive = any(keyword.lower() in ad_title for keyword in keywords)
                 match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
                 
+                # Increment counters based on matches
+                if match_positive:
+                    positive_matches_count += 1
+                    self.log_callback(f"✅ Título '{ad_title}' corresponde a uma palavra-chave positiva.")
+                
+                if match_negative:
+                    negative_matches_count += 1
+                    self.log_callback(f"❌ Título '{ad_title}' corresponde a uma palavra-chave negativa.")
+
                 if match_positive and not match_negative:
                     full_url = urljoin(self.base_url, ad_url)
                     ads.append({"title": ad_title, "url": full_url})
+            else:
+                if not has_ad_url:
+                    self.log_callback(f"⚠️ Link sem URL: {link.prettify().strip()}")
+                if not has_ad_title:
+                    self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
+
+        # Log the final counts
+        self.log_callback(f"📊 Resumo da extração: {len(ads)} anúncios válidos encontrados.")
+        self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches_count}")
+        self.log_callback(f"👎 Total de títulos com palavras-chave negativas: {negative_matches_count}")
         
         return ads
 
