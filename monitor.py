@@ -111,8 +111,9 @@ class Monitor:
 
                 #  when we add multiple scrapers, we can loop through them
                 #  and scrape each adding the results to new_ads
+                page_number =1
                 new_ads = self.scraper.scrape(
-                    self.keywords, self.negative_keywords_list, 3)
+                    self.keywords, self.negative_keywords_list, page_number)
 
                 # Filter out already seen ads using hashes
                 truly_new_ads = []

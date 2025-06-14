@@ -17,7 +17,7 @@ app = Flask(__name__, template_folder='template')
 logging.basicConfig(
     filename='app.log',
     filemode='w',
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname).1s - %(message)s',
     datefmt='%H:%M:%S'
 )
