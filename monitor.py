@@ -28,8 +28,8 @@ class Monitor:
         self.seen_ads = self._load_seen_ads()
         
         # Dynamic interval settings
-        self.base_interval_minutes = 1
-        self.max_interval_minutes = 30
+        self.base_interval_minutes = 10
+        self.max_interval_minutes = 45
         self.interval_multiplier = 5  # Multiply interval by 5 when incomplete page detected
         self.current_interval_minutes = self.base_interval_minutes
         self.incomplete_page_count = 0
