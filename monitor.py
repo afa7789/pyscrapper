@@ -30,10 +30,10 @@ class Monitor:
         # Dynamic interval settings
         self.base_interval_minutes = 20
         self.max_interval_minutes = 50
-        self.interval_multiplier = 5  # Multiply interval by 5 when incomplete page detected
+        self.interval_multiplier = 5
         self.current_interval_minutes = self.base_interval_minutes
         self.incomplete_page_count = 0
-        self.incomplete_page_threshold = 3  # Number of consecutive incomplete pages to trigger interval increase
+        self.incomplete_page_threshold = 3
 
     def _hash_ad(self, ad):
         return hashlib.sha256(ad['url'].encode('utf-8')).hexdigest()
@@ -68,7 +68,7 @@ class Monitor:
                 if new_interval != self.current_interval_minutes:
                     self.current_interval_minutes = new_interval
                     self.log_callback(f"⏰ Intervalo aumentado para {self.current_interval_minutes} minutos devido a páginas incompletas")
-                self.incomplete_page_count = 0  # Reset counter after adjustment
+                self.incomplete_page_count = 0
         else:
             self.incomplete_page_count = 0
             if self.current_interval_minutes != self.base_interval_minutes:
@@ -89,6 +89,8 @@ class Monitor:
                 current_time_gmt3 = datetime.now(gmt_minus_3)
                 current_hour = current_time_gmt3.hour
                 
+                self.log_callback(f"🔄 Estado do loop: running={self.running}, hora atual={current_time_gmt3.strftime('%H:%M:%S')}")
+                
                 if current_hour < 6 or current_hour >= 23:
                     current_time_str = current_time_gmt3.strftime("%H:%M:%S")
                     self.log_callback(f"😴 Fora do horário de funcionamento - {current_time_str} (GMT-3)")
@@ -103,6 +105,7 @@ class Monitor:
                     
                     for i in range(0, seconds_until_6am, 300):
                         if not self.running:
+                            self.log_callback("🛑 Loop interrompido durante espera fora do horário")
                             break
                         remaining = seconds_until_6am - i
                         hours_remaining = remaining // 3600

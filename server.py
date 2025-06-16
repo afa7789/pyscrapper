@@ -4,12 +4,10 @@ import logging
 import os
 from dotenv import load_dotenv
 import json
-import base64
 from threading import Thread
 from monitor import Monitor
-from scraper_cloudflare import MarketRoxoScraperCloudflare  # Mudança aqui
+from scraper_cloudflare import MarketRoxoScraperCloudflare
 from telegram_bot import TelegramBot
-# import pdb  # Import pdb at the top of server.py
 
 app = Flask(__name__, template_folder='template')
 
@@ -67,11 +65,26 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 monitor = None
 monitor_thread = None
 
+def save_monitor_status(status):
+    try:
+        with open('monitor_status.json', 'w') as f:
+            json.dump({'is_running': status}, f)
+    except Exception as e:
+        logger.error(f"Erro ao salvar estado do monitor: {str(e)}")
+
+def load_monitor_status():
+    try:
+        if os.path.exists('monitor_status.json'):
+            with open('monitor_status.json', 'r') as f:
+                return json.load(f).get('is_running', False)
+        return False
+    except Exception as e:
+        logger.error(f"Erro ao carregar estado do monitor: {str(e)}")
+        return False
 
 def check_auth(username, password):
     """Verifica as credenciais do Basic Auth."""
     return username == USERNAME and password == PASSWORD
-
 
 def authenticate():
     """Resposta para autenticação não autorizada."""
@@ -79,7 +92,6 @@ def authenticate():
         'Autenticação necessária.', 401,
         {'WWW-Authenticate': 'Basic realm="Login Required"'}
     )
-
 
 def requires_auth(f):
     """Decorador para rotas protegidas por Basic Auth."""
@@ -91,11 +103,9 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-
 @app.route('/')
 def home():
     """Rota pública que retorna a página principal."""
-    # logger.info("Acessada a rota pública /")
     return render_template(
         'index.html',
         company_title=COMPANY_TITLE,
@@ -109,12 +119,10 @@ def home():
         website=WEBSITE
     )
 
-
 @app.route('/admin')
 @requires_auth
 def admin():
     """Rota protegida que retorna a página de administração."""
-    # logger.info("Acessada a rota protegida /admin")
     return render_template(
         'admin.html',
         keywords_list=DEFAULT_KEYWORDS,
@@ -125,30 +133,25 @@ def admin():
         password=PASSWORD
     )
 
-
 @app.route('/start', methods=['POST'])
 @requires_auth
 def start():
-    # pdb.set_trace()
-    """Inicia o monitoramento com os parâmetros fornecidos."""
     global monitor, monitor_thread
     try:
+        if load_monitor_status():
+            logger.info("Monitoramento já está ativo")
+            return {"message": "Monitoramento já está ativo!"}, 400
 
         data = request.get_json()
-        keywords_list = [kw.strip()
-                         for kw in data['keywords_list'].split(",") if kw.strip()]
+        keywords_list = [kw.strip() for kw in data['keywords_list'].split(",") if kw.strip()]
         negative_keywords_list = [
             kw.strip() for kw in data['negative_keywords_list'].split(",") if kw.strip()]
         token = data['token']
         chat_input = data['chat_input']
 
-        # Configura o TelegramBot e Scraper
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
-        
-        # Usar o scraper automático com gestão de drivers
         proxy = PROXIES.get("https") or PROXIES.get("http") or None
         if proxy and ("http://" in proxy or "https://" in proxy):
-            # Remove 'http://' or 'https://' prefix if present
             proxy = proxy.replace("http://", "").replace("https://", "")
         scraper = MarketRoxoScraperCloudflare(
             log_callback=logger.info, 
@@ -156,11 +159,9 @@ def start():
             proxies=None,
         )
 
-        # Filtra palavras-chave negativas
         filtered_keywords = [
             kw for kw in keywords_list if kw not in negative_keywords_list]
 
-        # Inicia o Monitor
         monitor = Monitor(
             keywords=filtered_keywords,
             negative_keywords_list=negative_keywords_list,
@@ -170,10 +171,12 @@ def start():
             log_callback=logger.info
         )
 
-        # Inicia o monitoramento em uma thread separada
+        logger.info(f"Monitor criado: {monitor}")
         monitor_thread = Thread(target=monitor.start)
         monitor_thread.daemon = True
         monitor_thread.start()
+        logger.info(f"Monitor thread iniciada: {monitor_thread.is_alive()}")
+        save_monitor_status(True)
 
         logger.info(
             f"Monitoramento iniciado com palavras-chave: {', '.join(filtered_keywords)}, chat_id: {chat_input}")
@@ -182,28 +185,33 @@ def start():
         logger.error(f"Erro ao iniciar monitoramento: {str(e)}")
         return {"message": f"Erro ao iniciar monitoramento: {str(e)}"}, 500
 
-
 @app.route('/stop', methods=['POST'])
 @requires_auth
 def stop():
-    """Para o monitoramento."""
     global monitor, monitor_thread
+    logger.info(f"Estado do monitor antes de parar: {monitor}")
+    logger.info(f"Estado da thread antes de parar: {monitor_thread}")
     try:
+        if not load_monitor_status():
+            logger.info("Nenhum monitoramento ativo para parar")
+            return {"message": "Nenhum monitoramento ativo para parar"}, 400
+
         if monitor:
             monitor.stop()
             if monitor_thread and monitor_thread.is_alive():
-                monitor_thread.join(timeout=2)
+                monitor_thread.join(timeout=10)
             monitor = None
             monitor_thread = None
+            save_monitor_status(False)
             logger.info("Monitoramento parado com sucesso")
             return {"message": "Monitoramento parado com sucesso!"}, 200
         else:
-            logger.info("Nenhum monitoramento ativo para parar")
-            return {"message": "Nenhum monitoramento ativo para parar"}, 400
+            logger.info("Monitoramento não encontrado, mas estado indica que estava ativo")
+            save_monitor_status(False)
+            return {"message": "Monitoramento parado com sucesso!"}, 200
     except Exception as e:
         logger.error(f"Erro ao parar monitoramento: {str(e)}")
         return {"message": f"Erro ao parar monitoramento: {str(e)}"}, 500
-
 
 @app.route('/logs')
 @requires_auth
@@ -212,12 +220,10 @@ def logs():
     try:
         with open('app.log', 'r', encoding='utf-8') as f:
             log_content = f.read()
-        # logger.info("Logs acessados via /logs")
         return Response(log_content, mimetype='text/plain')
     except Exception as e:
         logger.error(f"Erro ao ler logs: {str(e)}")
         return {"message": f"Erro ao ler logs: {str(e)}"}, 500
 
-
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000, threaded=False, processes=1)
