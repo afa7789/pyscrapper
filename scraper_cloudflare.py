@@ -6,6 +6,10 @@ from urllib.parse import urljoin
 import cloudscraper
 from fake_useragent import UserAgent
 import json
+import pickle
+import os
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 class MarketRoxoScraperCloudflare:
     def __init__(self, log_callback, base_url, proxies=None):
@@ -17,6 +21,9 @@ class MarketRoxoScraperCloudflare:
         self.log_callback = log_callback
         self.proxies = self._setup_proxies(proxies)
         
+        # Session file to persist cookies
+        self.session_file = "cf_session.pkl"
+        
         # Inicializa o cloudscraper que bypassa Cloudflare automaticamente
         self.scraper = cloudscraper.create_scraper(
             browser={
@@ -24,16 +31,33 @@ class MarketRoxoScraperCloudflare:
                 'platform': 'windows',
                 'desktop': True
             },
-            proxies=self.proxies # Adicionado o parâmetro proxies aqui
+            delay=10,  # Add delay to appear more human
         )
+        
+        # Load existing session if available
+        self._load_session()
+        
+        # Setup retry strategy
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.scraper.mount("http://", adapter)
+        self.scraper.mount("https://", adapter)
         
         # Setup de User Agents rotativos
         self.ua = UserAgent()
         self._setup_headers()
         
-        # Delay entre requests para parecer mais humano
-        self.delay_min = 15
-        self.delay_max = 35
+        # Increase delays to be more human-like
+        self.delay_min = 20
+        self.delay_max = 45
+        
+        # Track failed requests to detect when we need a new session
+        self.consecutive_failures = 0
+        self.max_failures_before_reset = 3
         
         self.log_callback(f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
 
@@ -58,6 +82,57 @@ class MarketRoxoScraperCloudflare:
             return proxies
         return None
 
+    def _load_session(self):
+        """Load cookies from previous session"""
+        try:
+            if os.path.exists(self.session_file):
+                with open(self.session_file, 'rb') as f:
+                    cookies = pickle.load(f)
+                    self.scraper.cookies.update(cookies)
+                    self.log_callback(f"🍪 Sessão anterior carregada com {len(cookies)} cookies")
+        except Exception as e:
+            self.log_callback(f"⚠️ Erro ao carregar sessão: {e}")
+
+    def _save_session(self):
+        """Save current session cookies"""
+        try:
+            with open(self.session_file, 'wb') as f:
+                pickle.dump(self.scraper.cookies, f)
+            self.log_callback(f"🍪 Sessão salva com {len(self.scraper.cookies)} cookies")
+        except Exception as e:
+            self.log_callback(f"⚠️ Erro ao salvar sessão: {e}")
+
+    def _reset_session(self):
+        """Reset the scraper session when Cloudflare blocks us"""
+        self.log_callback("🔄 Resetando sessão devido a bloqueios consecutivos...")
+        
+        # Remove old session file
+        if os.path.exists(self.session_file):
+            os.remove(self.session_file)
+        
+        # Create new scraper instance
+        self.scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': random.choice(['chrome', 'firefox']),
+                'platform': random.choice(['windows', 'linux', 'darwin']),
+                'desktop': True
+            },
+            delay=random.randint(10, 20),
+        )
+        
+        # Setup retry strategy again
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.scraper.mount("http://", adapter)
+        self.scraper.mount("https://", adapter)
+        
+        self.consecutive_failures = 0
+        self.log_callback("✅ Nova sessão criada")
+
     def _setup_headers(self):
         """Configura headers realistas para evitar detecção"""
         self.base_headers = {
@@ -71,7 +146,11 @@ class MarketRoxoScraperCloudflare:
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Brave";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-gpc': '1'
         }
 
     def _get_random_headers(self):
@@ -79,17 +158,21 @@ class MarketRoxoScraperCloudflare:
         headers = self.base_headers.copy()
         headers['User-Agent'] = self.ua.random
         
-        # Adiciona alguns headers extras aleatoriamente
+        # Add some randomization to headers
         if random.choice([True, False]):
-            headers['X-Forwarded-For'] = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+            headers['Accept-Language'] = random.choice([
+                'pt-BR,pt;q=0.9,en;q=0.8',
+                'en-US,en;q=0.9,pt;q=0.8',
+                'pt-BR,pt;q=0.8,en;q=0.7'
+            ])
         
         return headers
 
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
         unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
-        random_word = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=5))
-        query = "+".join(unique_keywords) + "+" + random_word
+        # Remove the random word - it might be flagging us
+        query = "+".join(unique_keywords)
         return query
 
     def _random_delay(self):
@@ -98,41 +181,67 @@ class MarketRoxoScraperCloudflare:
         self.log_callback(f"⏳ Aguardando {delay:.1f}s...")
         time.sleep(delay)
 
+    def _is_cloudflare_blocked(self, response):
+        """Check if the response indicates Cloudflare blocking"""
+        text_lower = response.text.lower()
+        
+        # Common Cloudflare block indicators
+        block_indicators = [
+            "cloudflare" in text_lower and "blocked" in text_lower,
+            "access denied" in text_lower,
+            "captcha" in text_lower and "cloudflare" in text_lower,
+            "ray id:" in text_lower and len(response.text) < 2000,  # Cloudflare error pages are usually short
+            response.status_code == 403,
+            response.status_code == 503,
+            "checking your browser" in text_lower
+        ]
+        
+        return any(block_indicators)
+
     def _make_request(self, url, max_retries=3):
         """Faz request com retry e bypass Cloudflare"""
         for attempt in range(max_retries):
             try:
                 headers = self._get_random_headers()
-                
+
                 # Configura o scraper com novos headers
                 self.scraper.headers.update(headers)
-                
-                response = self.scraper.get(url, timeout=30)
-                
+
+                self.log_callback(f"🌐 Fazendo request para: {url}")
+                response = self.scraper.get(url, proxies=self.proxies, timeout=30)
+
                 response.raise_for_status()
-                
-                # Verifica se não foi bloqueado pelo Cloudflare
-                if "cloudflare" in response.text.lower() and "blocked" in response.text.lower():
+
+                # Check if blocked by Cloudflare
+                if self._is_cloudflare_blocked(response):
                     raise Exception("Bloqueado pelo Cloudflare")
-                
+
+                # Check if we got a "no ads found" page but with successful status
+                if ("Nenhum anúncio foi encontrado" in response.text or 
+                    "Não encontramos nenhum resultado" in response.text):
+                    self.log_callback(f"ℹ️ Página sem anúncios retornada (pode ser legítimo)")
+
                 self.log_callback(f"✅ Request bem-sucedido: {response.status_code}")
-                return response
                 
+                # Save session on successful request
+                self._save_session()
+                self.consecutive_failures = 0
+                
+                return response
+
             except Exception as e:
+                self.consecutive_failures += 1
                 self.log_callback(f"❌ Tentativa {attempt + 1} falhou: {str(e)}")
+                
+                # If we've had too many consecutive failures, reset session
+                if self.consecutive_failures >= self.max_failures_before_reset:
+                    self._reset_session()
+                
                 if attempt < max_retries - 1:
-                    # Delay maior entre tentativas
-                    time.sleep(random.uniform(30, 60))
-                    
-                    # Recria o scraper para nova sessão
-                    self.scraper = cloudscraper.create_scraper(
-                        browser={
-                            'browser': random.choice(['chrome', 'firefox']),
-                            'platform': random.choice(['windows', 'linux', 'darwin']),
-                            'desktop': True
-                        },
-                        proxies=self.proxies # Adicionado o parâmetro proxies aqui
-                    )
+                    # Exponential backoff with jitter
+                    delay = random.uniform(30, 90) * (2 ** attempt)
+                    self.log_callback(f"⏳ Aguardando {delay:.1f}s antes da próxima tentativa...")
+                    time.sleep(delay)
                 else:
                     raise e
 
@@ -156,13 +265,7 @@ class MarketRoxoScraperCloudflare:
                     with open(f"debug_page_{page}.html", "w", encoding="utf-8") as f:
                         f.write(str(soup))
                     self.log_callback(f"💾 Página {page} salva.")
-                
-                # Verifica se chegou ao fim
-                if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
-                    self.log_callback(f"🔚 Páginade anúncios não encotrados. url:{url}")
-                    # self.log_callback("🔚 Fim das páginas disponíveis.")
-                    break
-                
+                 
                 new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
                 
                 if new_ads:
@@ -176,6 +279,11 @@ class MarketRoxoScraperCloudflare:
                 # Delay antes da próxima página
                 if page <= max_pages:
                     self._random_delay()
+                
+                # Verifica se chegou ao fim
+                if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
+                    self.log_callback(f"🔚 Página de anúncios não encontrados. url:{url}")
+                    break
                 
             except Exception as e:
                 self.log_callback(f"💥 Erro na página {page}: {e}")
@@ -236,8 +344,7 @@ class MarketRoxoScraperCloudflare:
                 not_valid_or_invalid_count += 1
                 continue
             
-            # for debug purposes, you can log the found ad to a file
-            # self._log_found_ad_to_file(page_url, ad_title, ad_url)
+            self._log_found_ad_to_file(page_url, ad_title, ad_url)
             
             match_positive, match_negative = self._check_keyword_matches(
                 ad_title, 
