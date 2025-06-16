@@ -187,6 +187,47 @@ class MarketRoxoScraperCloudflare:
         self.log_callback(f"🎯 Total de anúncios encontrados: {len(ads)}")
         return ads
 
+    def scrape_err(self, keywords, negative_keywords_list, max_pages=1, save_page=False):
+        """
+        Versão de scrape para testes que lança um erro (Exception)
+        se nenhuma página de anúncios for encontrada ou se ocorrer um erro HTTP.
+        O objetivo é testar a resiliência a falhas imediatas.
+        """
+        query = self._build_query(keywords)
+        ads = []
+        page = 1 # Para este teste, geralmente queremos falha rápida, então 1 página é suficiente.
+        
+        self.log_callback(f"🚀 Iniciando scraping_err para: {query}")
+        
+        url = f"{self.base_url}/brasil?q={query}&o={page}" if page > 1 else f"{self.base_url}/brasil?q={query}"
+        self.log_callback(f"📄 Scraping_err página {page}... {url}")
+        
+        try:
+            response = self._make_request(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Verifica se chegou ao fim (simulando "página falhou")
+            if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
+                self.log_callback(f"🔚 Página de anúncios não encontrada. URL: {url}")
+                raise ValueError("No ads found on page - interpreted as page failure.") # Lança um erro explícito
+            
+            new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
+            
+            if new_ads:
+                self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page}.")
+                ads.extend(new_ads)
+            else:
+                self.log_callback(f"⚠️ Nenhum anúncio relevante na página {page} após filtragem. Interpretado como falha de página.")
+                raise ValueError("No relevant ads found after filtering - interpreted as page failure.") # Lança um erro explícito
+            
+        except Exception as e:
+            self.log_callback(f"💥 Erro em scrape_err para a página {page}: {e}")
+            raise e # Relança a exceção para ser capturada pelo teste
+
+        self.log_callback(f"🎯 Total de anúncios encontrados por scrape_err: {len(ads)}")
+        return ads
+
+
     def _log_found_ad_to_file(self, page_url, ad_title, ad_url):
         """Logs found ads to a secondary file."""
         try:
@@ -239,7 +280,7 @@ class MarketRoxoScraperCloudflare:
                 not_valid_or_invalid_count += 1
                 continue
             
-            self._log_found_ad_to_file(page_url, ad_title, ad_url)
+            # self._log_found_ad_to_file(page_url, ad_title, ad_url)
             
             match_positive, match_negative = self._check_keyword_matches(
                 ad_title, 

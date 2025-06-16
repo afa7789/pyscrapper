@@ -1,6 +1,6 @@
 import threading
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 import hashlib
 import os
 from emoji_sorter import get_random_emoji
@@ -13,7 +13,7 @@ class Monitor:
         self.telegram_bot = telegram_bot
         self.chat_id = chat_id
         self.log_callback = log_callback
-        self._stop_event = threading.Event() # Use an event for responsive stopping
+        self.running = False
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
@@ -34,16 +34,15 @@ class Monitor:
         self.current_interval_minutes = self.base_interval_minutes
         self.incomplete_page_count = 0
         self.incomplete_page_threshold = 3
-        self.max_pages_per_cycle = 5 # New attribute for scraping multiple pages
 
     def _hash_ad(self, ad):
-        return hashlib.sha256(ad["url"].encode("utf-8")).hexdigest()
+        return hashlib.sha256(ad['url'].encode('utf-8')).hexdigest()
 
     def _load_seen_ads(self):
         seen = set()
         if os.path.exists(self.hash_file):
             try:
-                with open(self.hash_file, "r", encoding="utf-8") as f:
+                with open(self.hash_file, 'r', encoding='utf-8') as f:
                     for line in f:
                         hash_value = line.strip()
                         if hash_value:
@@ -55,7 +54,7 @@ class Monitor:
 
     def _save_ad_hash(self, ad_hash):
         try:
-            with open(self.hash_file, "a", encoding="utf-8") as f:
+            with open(self.hash_file, 'a', encoding='utf-8') as f:
                 f.write(f"{ad_hash}\n")
         except Exception as e:
             self.log_callback(f"❌ Erro ao salvar hash de anúncio: {str(e)}")
@@ -77,18 +76,20 @@ class Monitor:
                 self.log_callback(f"⏰ Intervalo restaurado para {self.base_interval_minutes} minuto após sucesso")
 
     def start(self):
+        self.running = True
         self.log_callback("🚀 Monitoramento iniciado!")
-        self.log_callback(f"📝 Palavras-chave: {", ".join(self.keywords)}")
+        self.log_callback(f"📝 Palavras-chave: {', '.join(self.keywords)}")
         self.log_callback(f"💬 Chat ID: {self.chat_id}")
         self.log_callback("⏰ Horário de funcionamento: 06:00 - 23:00 (GMT-3)")
         cycle_count = 0
-        while not self._stop_event.is_set(): # Check stop event
+        while self.running:
             try:
+                from datetime import timezone, timedelta
                 gmt_minus_3 = timezone(timedelta(hours=-3))
                 current_time_gmt3 = datetime.now(gmt_minus_3)
                 current_hour = current_time_gmt3.hour
                 
-                self.log_callback(f"🔄 Estado do loop: running={not self._stop_event.is_set()}, hora atual={current_time_gmt3.strftime("%H:%M:%S")}")
+                self.log_callback(f"🔄 Estado do loop: running={self.running}, hora atual={current_time_gmt3.strftime('%H:%M:%S')}")
                 
                 if current_hour < 6 or current_hour >= 23:
                     current_time_str = current_time_gmt3.strftime("%H:%M:%S")
@@ -102,16 +103,24 @@ class Monitor:
                     
                     seconds_until_6am = int((next_6am - current_time_gmt3).total_seconds())
                     
-                    # Use wait for responsive sleep
-                    self._stop_event.wait(seconds_until_6am)
+                    for i in range(0, seconds_until_6am, 300):
+                        if not self.running:
+                            self.log_callback("🛑 Loop interrompido durante espera fora do horário")
+                            break
+                        remaining = seconds_until_6am - i
+                        hours_remaining = remaining // 3600
+                        minutes_remaining = (remaining % 3600) // 60
+                        self.log_callback(f"💤 Aguardando horário de funcionamento - {hours_remaining:02d}:{minutes_remaining:02d} restantes")
+                        time.sleep(min(300, remaining))
+                    
                     continue
 
                 cycle_count += 1
                 current_time = current_time_gmt3.strftime("%H:%M:%S")
                 self.log_callback(f"🔍 Verificação #{cycle_count} - {current_time} (GMT-3)")
 
-                # Pass max_pages_per_cycle to scraper
-                new_ads = self.scraper.scrape(self.keywords, self.negative_keywords_list, self.max_pages_per_cycle)
+                page_number = 1
+                new_ads = self.scraper.scrape(self.keywords, self.negative_keywords_list, page_number)
 
                 self._adjust_interval(len(new_ads) > 0)
 
@@ -126,17 +135,16 @@ class Monitor:
 
                 if truly_new_ads:
                     self.log_callback(f"✅ Encontrou {len(truly_new_ads)} anúncios ainda não vistos")
-                    formatted_ads = [f"Título: {ad["title"]}\nURL: {ad["url"]}" for ad in truly_new_ads]
+                    formatted_ads = [f"Título: {ad['title']}\nURL: {ad['url']}" for ad in truly_new_ads]
                     try:
                         messages = self._split_message(formatted_ads)
                         for msg in messages:
                             self.telegram_bot.send_message(self.chat_id, msg)
-                            # Use wait for responsive sleep
-                            self._stop_event.wait(1)
+                            time.sleep(1)
+                        for ad_hash in truly_new_ads_hash:
+                            self._save_ad_hash(ad_hash)
                     except Exception as e:
                         self.log_callback(f"❌ Erro ao enviar mensagens para Telegram: {str(e)}")
-                    for ad_hash in truly_new_ads_hash:
-                        self._save_ad_hash(ad_hash)
                     self.log_callback(f"✅ Enviados {len(truly_new_ads)} novos anúncios para Telegram")
                 else:
                     self.log_callback("ℹ️ Nenhum anúncio novo encontrado")
@@ -148,10 +156,12 @@ class Monitor:
             seconds_in_minute = 60
             seconds_to_wait = self.current_interval_minutes * seconds_in_minute
 
-            # Use wait for responsive sleep
-            if not self._stop_event.is_set():
+            if self.running:
                 self.log_callback(f"⏳ Aguardando próxima verificação ({self.current_interval_minutes} minutos)...")
-                self._stop_event.wait(seconds_to_wait)
+                for i in range(seconds_to_wait):
+                    if not self.running:
+                        break
+                    time.sleep(1)
 
     def _split_message(self, ads):
         messages = []
@@ -164,5 +174,5 @@ class Monitor:
         return messages
 
     def stop(self):
-        self._stop_event.set() # Set the event to signal stopping
+        self.running = False
         self.log_callback("🛑 Comando de parada enviado...")
