@@ -80,7 +80,7 @@
             .then(data => {
                 const logOutput = document.getElementById('logOutput');
                 // Filter out lines containing "GET /logs HTTP/1.1" 200
-                const filteredData = data.split('\n').filter(line => !line.includes('GET /logs HTTP/1.1" 200')).join('\n');
+                const filteredData = data.split('\n').filter(line => !line.includes('GET /logs HTTP/1.1')).join('\n');
                 logOutput.textContent = filteredData || 'Nenhum log disponível';
                 // Remove or comment out the auto-scroll line
                 // logOutput.scrollTop = logOutput.scrollHeight;

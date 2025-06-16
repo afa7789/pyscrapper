@@ -16,6 +16,7 @@ class MarketRoxoScraperCloudflare:
         self.base_url = base_url
         self.log_callback = log_callback
         self.session_file = "cf_session.pkl"
+        self.session_timeout = 1800  # 30 minutes
         
         self.scraper = cloudscraper.create_scraper(
             browser={
@@ -24,13 +25,14 @@ class MarketRoxoScraperCloudflare:
                 'desktop': True
             }
         )
+        self.session_start_time = time.time()
         self._load_session()
         
         self.ua = UserAgent()
         self._setup_headers()
         
-        self.delay_min = 15
-        self.delay_max = 35
+        self.delay_min = 30  # Increased delay
+        self.delay_max = 60
         
         self.log_callback(f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
 
@@ -41,8 +43,11 @@ class MarketRoxoScraperCloudflare:
                     cookies = pickle.load(f)
                     self.scraper.cookies.update(cookies)
                     self.log_callback(f"🍪 Sessão anterior carregada com {len(cookies)} cookies")
+            else:
+                self.log_callback("ℹ️ Nenhum arquivo de sessão encontrado, iniciando nova sessão")
         except Exception as e:
             self.log_callback(f"⚠️ Erro ao carregar sessão: {e}")
+            self._reset_session()
 
     def _save_session(self):
         try:
@@ -53,7 +58,7 @@ class MarketRoxoScraperCloudflare:
             self.log_callback(f"⚠️ Erro ao salvar sessão: {e}")
 
     def _reset_session(self):
-        self.log_callback("🔄 Resetando sessão devido a bloqueio...")
+        self.log_callback("🔄 Resetando sessão...")
         if os.path.exists(self.session_file):
             os.remove(self.session_file)
         self.scraper = cloudscraper.create_scraper(
@@ -63,7 +68,11 @@ class MarketRoxoScraperCloudflare:
                 'desktop': True
             }
         )
+        self.session_start_time = time.time()
         self.log_callback("✅ Nova sessão criada")
+
+    def _is_session_expired(self):
+        return (time.time() - self.session_start_time) > self.session_timeout
 
     def _setup_headers(self):
         self.base_headers = {
@@ -77,20 +86,20 @@ class MarketRoxoScraperCloudflare:
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Brave";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"'
         }
 
     def _get_random_headers(self):
         headers = self.base_headers.copy()
         headers['User-Agent'] = self.ua.random
-        if random.choice([True, False]):
-            headers['X-Forwarded-For'] = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
         return headers
 
     def _build_query(self, keywords):
         unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
-        random_word = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=5))
-        query = "+".join(unique_keywords) + "+" + random_word
+        query = "+".join(unique_keywords)
         return query
 
     def _random_delay(self):
@@ -98,7 +107,22 @@ class MarketRoxoScraperCloudflare:
         self.log_callback(f"⏳ Aguardando {delay:.1f}s...")
         time.sleep(delay)
 
+    def _make_fallback_request(self, url, headers):
+        try:
+            session = requests.Session()
+            session.headers.update(headers)
+            response = session.get(url, timeout=30)
+            response.raise_for_status()
+            self.log_callback(f"✅ Fallback request bem-sucedido: {response.status_code}")
+            return response
+        except Exception as e:
+            self.log_callback(f"❌ Fallback request falhou: {str(e)}")
+            return None
+
     def _make_request(self, url, max_retries=3):
+        if self._is_session_expired():
+            self._reset_session()
+
         for attempt in range(max_retries):
             try:
                 headers = self._get_random_headers()
@@ -113,6 +137,7 @@ class MarketRoxoScraperCloudflare:
                     raise Exception("Bloqueado pelo Cloudflare")
                 if "data-testid=\"ad-card-link\"" not in response.text and len(response.text) > 1000:
                     self.log_callback(f"⚠️ Página incompleta detectada (sem anúncios)")
+                    self._reset_session()
                     raise Exception("Página incompleta sem anúncios")
                 
                 self.log_callback(f"✅ Request bem-sucedido: {response.status_code}")
@@ -122,13 +147,17 @@ class MarketRoxoScraperCloudflare:
             except Exception as e:
                 self.log_callback(f"❌ Tentativa {attempt + 1} falhou: {str(e)}")
                 if attempt < max_retries - 1:
-                    if str(e).startswith("403"):
+                    if str(e).startswith("403") or "Página incompleta" in str(e):
                         self._reset_session()
-                    time.sleep(random.uniform(30, 60))
+                    time.sleep(random.uniform(60, 120))  # Increased retry delay
                 else:
+                    self.log_callback("🔄 Tentando fallback request...")
+                    response = self._make_fallback_request(url, headers)
+                    if response:
+                        return response
                     raise e
 
-    def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
+    def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=True):
         query = self._build_query(keywords)
         ads = []
         page = 1
@@ -174,137 +203,4 @@ class MarketRoxoScraperCloudflare:
 
     def _log_found_ad_to_file(self, page_url, ad_title, ad_url):
         try:
-            with open("found_ads.log", "a", encoding="utf-8") as f:
-                f.write(f"Página: {page_url}\n")
-                f.write(f"Título do Anúncio: {ad_title}\n")
-                f.write(f"Link do Anúncio: {ad_url}\n")
-                f.write("-" * 50 + "\n")
-        except Exception as e:
-            self.log_callback(f"❌ Erro ao escrever no arquivo found_ads.log: {e}")
-
-    def _extract_ads(self, soup, keywords, negative_keywords_list=None, page_url=""):
-        debug = True  # Enable for detailed logging
-        ads = []
-        
-        if debug:
-            self._log_debug_info(soup, keywords, negative_keywords_list, page_url)
-        
-        found_links = self._find_ad_links(soup, debug)
-        if not found_links:
-            self._handle_no_ads_found(soup)
-            return ads
-        
-        if debug:
-            self.log_callback(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
-        
-        positive_matches_count = 0
-        negative_matches_count = 0
-        not_valid_or_invalid_count = 0
-        
-        for i, link in enumerate(found_links):
-            if debug:
-                self.log_callback(f"--- Processando link {i+1}/{len(found_links)} ---")
-            
-            ad_url, ad_title = self._extract_ad_details(link, debug)
-            
-            if not ad_url or not ad_title:
-                self._handle_invalid_ad(link, ad_url, ad_title)
-                not_valid_or_invalid_count += 1
-                continue
-            
-            self._log_found_ad_to_file(page_url, ad_title, ad_url)
-            
-            match_positive, match_negative = self._check_keyword_matches(
-                ad_title, keywords, negative_keywords_list, debug)
-            
-            positive_matches_count += 1 if match_positive else 0
-            negative_matches_count += 1 if match_negative else 0
-            
-            if match_positive and not match_negative:
-                full_url = urljoin(self.base_url, ad_url)
-                ads.append({"title": ad_title, "url": full_url})
-                if debug:
-                    self.log_callback(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
-            else:
-                not_valid_or_invalid_count += 1
-                if debug:
-                    self.log_callback("🚫 Anúncio IGNORADO (não atendeu aos critérios de correspondência positiva e/ou negativa).")
-        
-        self._log_extraction_summary(
-            len(ads), positive_matches_count, negative_matches_count, not_valid_or_invalid_count)
-        
-        return ads
-
-    def _log_debug_info(self, soup, keywords, negative_keywords_list, page_url):
-        self.log_callback(f"🔍 Iniciando extração de anúncios da página: {page_url}")
-        self.log_callback(f"📌 Palavras-chave positivas: {keywords}")
-        self.log_callback(f"📌 Palavras-chave negativas: {negative_keywords_list or 'Nenhuma'}")
-        self.log_callback(f"📄 Tamanho do HTML: {len(str(soup))} caracteres")
-
-    def _find_ad_links(self, soup, debug=False):
-        selectors = [
-            "a[data-testid='ad-card-link']",
-            "a.fnmrjs-0",
-            "a[href*='/v-']",
-            "a.olx-ad-card__link-wrapper",
-            "a.olx-adcard__link"
-        ]
-        
-        for selector in selectors:
-            links = soup.select(selector)
-            if links:
-                if debug:
-                    self.log_callback(f"🔍 Usando seletor: {selector} ({len(links)} links)")
-                return links
-        
-        return []
-
-    def _handle_no_ads_found(self, soup):
-        self.log_callback("⚠️ Nenhum link de anúncio encontrado com os seletores conhecidos")
-        with open("debug_no_ads.html", "w", encoding="utf-8") as f:
-            f.write(str(soup))
-
-    def _extract_ad_details(self, link, debug=False):
-        ad_url = link.get("href")
-        ad_title = (
-            link.get("title") or 
-            link.get("aria-label") or 
-            (link.find("h2") and link.find("h2").get_text(strip=True)) or
-            (link.find("span") and link.find("span").get_text(strip=True)) or
-            ""
-        ).lower()
-        
-        if debug:
-            self.log_callback(f"URL do anúncio: {ad_url}")
-            self.log_callback(f"Título do anúncio (processado): '{ad_title}'")
-        
-        return ad_url, ad_title
-
-    def _handle_invalid_ad(self, link, ad_url, ad_title):
-        if not ad_url:
-            self.log_callback(f"⚠️ Link sem URL: {link.prettify().strip()}")
-        if not ad_title:
-            self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
-
-    def _check_keyword_matches(self, ad_title, keywords, negative_keywords_list, debug=False):
-        match_positive = any(keyword.lower() in ad_title for keyword in keywords)
-        match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
-        
-        if debug:
-            if match_positive:
-                self.log_callback(f"✅ Título '{ad_title}' CORRESPONDE a uma palavra-chave POSITIVA.")
-            else:
-                self.log_callback(f"❌ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave POSITIVA.")
-            
-            if match_negative:
-                self.log_callback(f"❌ Título '{ad_title}' CORRESPONDE a uma palavra-chave NEGATIVA.")
-            else:
-                self.log_callback(f"✅ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave NEGATIVA.")
-        
-        return match_positive, match_negative
-
-    def _log_extraction_summary(self, valid_ads_count, positive_matches, negative_matches, invalid_count):
-        self.log_callback(f"📊 Resumo da extração: {valid_ads_count} anúncios válidos encontrados.")
-        self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches}")
-        self.log_callback(f"👎 Total de títulos com palavras-chave negativas: {negative_matches}")
-        self.log_callback(f"🚫 Total de anúncios não válidos ou inválidos: {invalid_count}")
+            with open("found_ads.log", "a
