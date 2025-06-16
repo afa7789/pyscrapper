@@ -153,7 +153,7 @@ def start():
         scraper = MarketRoxoScraperCloudflare(
             log_callback=logger.info, 
             base_url=BASE_URL, 
-            proxies=proxy,
+            proxies=None,
         )
 
         # Filtra palavras-chave negativas

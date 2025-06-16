@@ -5,9 +5,6 @@ import hashlib
 import os
 from emoji_sorter import get_random_emoji
 
-# in the future scraper can be multiple scrapers
-
-
 class Monitor:
     def __init__(self, keywords, negative_keywords_list, scraper, telegram_bot, chat_id, log_callback, hash_file=None, batch_size=20):
         self.keywords = keywords
@@ -20,9 +17,7 @@ class Monitor:
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
-            # Create a directory for our application data in the user's home directory
-            data_dir = os.path.join(
-                os.path.expanduser("~"), ".marketroxo_data")
+            data_dir = os.path.join(os.path.expanduser("~"), ".marketroxo_data")
             os.makedirs(data_dir, exist_ok=True)
             self.hash_file = os.path.join(data_dir, "seen_ads.txt")
             self.log_callback(f"📁 Using hash file at: {self.hash_file}")
@@ -30,14 +25,20 @@ class Monitor:
             self.hash_file = hash_file
 
         self.batch_size = batch_size
-        self.seen_ads = self._load_seen_ads()  # Load previously seen ads from file
+        self.seen_ads = self._load_seen_ads()
+        
+        # Dynamic interval settings
+        self.base_interval_minutes = 1
+        self.max_interval_minutes = 30
+        self.interval_multiplier = 5  # Multiply interval by 5 when incomplete page detected
+        self.current_interval_minutes = self.base_interval_minutes
+        self.incomplete_page_count = 0
+        self.incomplete_page_threshold = 3  # Number of consecutive incomplete pages to trigger interval increase
 
     def _hash_ad(self, ad):
-        """Create a hash of the ad URL"""
         return hashlib.sha256(ad['url'].encode('utf-8')).hexdigest()
 
     def _load_seen_ads(self):
-        """Load previously seen ad hashes from file"""
         seen = set()
         if os.path.exists(self.hash_file):
             try:
@@ -46,23 +47,35 @@ class Monitor:
                         hash_value = line.strip()
                         if hash_value:
                             seen.add(hash_value)
-                self.log_callback(
-                    f"📂 Carregados {len(seen)} anúncios vistos anteriormente")
+                self.log_callback(f"📂 Carregados {len(seen)} anúncios vistos anteriormente")
             except Exception as e:
-                self.log_callback(
-                    f"❌ Erro ao carregar anúncios vistos: {str(e)}")
+                self.log_callback(f"❌ Erro ao carregar anúncios vistos: {str(e)}")
         return seen
 
     def _save_ad_hash(self, ad_hash):
-        """Save a hash to the seen ads file"""
         try:
             with open(self.hash_file, 'a', encoding='utf-8') as f:
                 f.write(f"{ad_hash}\n")
         except Exception as e:
             self.log_callback(f"❌ Erro ao salvar hash de anúncio: {str(e)}")
 
+    def _adjust_interval(self, ads_found):
+        """Adjusts the interval based on scraping results."""
+        if not ads_found:
+            self.incomplete_page_count += 1
+            if self.incomplete_page_count >= self.incomplete_page_threshold:
+                new_interval = min(self.current_interval_minutes * self.interval_multiplier, self.max_interval_minutes)
+                if new_interval != self.current_interval_minutes:
+                    self.current_interval_minutes = new_interval
+                    self.log_callback(f"⏰ Intervalo aumentado para {self.current_interval_minutes} minutos devido a páginas incompletas")
+                self.incomplete_page_count = 0  # Reset counter after adjustment
+        else:
+            self.incomplete_page_count = 0
+            if self.current_interval_minutes != self.base_interval_minutes:
+                self.current_interval_minutes = self.base_interval_minutes
+                self.log_callback(f"⏰ Intervalo restaurado para {self.base_interval_minutes} minuto após sucesso")
+
     def start(self):
-        """Starts the monitoring loop."""
         self.running = True
         self.log_callback("🚀 Monitoramento iniciado!")
         self.log_callback(f"📝 Palavras-chave: {', '.join(self.keywords)}")
@@ -71,7 +84,6 @@ class Monitor:
         cycle_count = 0
         while self.running:
             try:
-                # Check if current time is within allowed hours (6:00 - 23:00 GMT-3)
                 from datetime import timezone, timedelta
                 gmt_minus_3 = timezone(timedelta(hours=-3))
                 current_time_gmt3 = datetime.now(gmt_minus_3)
@@ -82,18 +94,14 @@ class Monitor:
                     self.log_callback(f"😴 Fora do horário de funcionamento - {current_time_str} (GMT-3)")
                     self.log_callback("⏰ Próxima verificação será às 06:00")
                     
-                    # Calculate seconds until 6:00 AM
                     if current_hour >= 23:
-                        # After 23:00, wait until 6:00 next day
                         next_6am = current_time_gmt3.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
                     else:
-                        # Before 6:00, wait until 6:00 same day
                         next_6am = current_time_gmt3.replace(hour=6, minute=0, second=0, microsecond=0)
                     
                     seconds_until_6am = int((next_6am - current_time_gmt3).total_seconds())
                     
-                    # Wait until 6:00 AM with periodic status updates
-                    for i in range(0, seconds_until_6am, 300):  # Check every 5 minutes
+                    for i in range(0, seconds_until_6am, 300):
                         if not self.running:
                             break
                         remaining = seconds_until_6am - i
@@ -102,20 +110,17 @@ class Monitor:
                         self.log_callback(f"💤 Aguardando horário de funcionamento - {hours_remaining:02d}:{minutes_remaining:02d} restantes")
                         time.sleep(min(300, remaining))
                     
-                    continue  # Skip to next iteration to check time again
+                    continue
 
                 cycle_count += 1
                 current_time = current_time_gmt3.strftime("%H:%M:%S")
-                self.log_callback(
-                    f"🔍 Verificação #{cycle_count} - {current_time} (GMT-3)")
+                self.log_callback(f"🔍 Verificação #{cycle_count} - {current_time} (GMT-3)")
 
-                #  when we add multiple scrapers, we can loop through them
-                #  and scrape each adding the results to new_ads
-                page_number =1
-                new_ads = self.scraper.scrape(
-                    self.keywords, self.negative_keywords_list, page_number)
+                page_number = 1
+                new_ads = self.scraper.scrape(self.keywords, self.negative_keywords_list, page_number)
 
-                # Filter out already seen ads using hashes
+                self._adjust_interval(len(new_ads) > 0)
+
                 truly_new_ads = []
                 truly_new_ads_hash = []
                 for ad in new_ads:
@@ -126,48 +131,36 @@ class Monitor:
                         truly_new_ads.append(ad)
 
                 if truly_new_ads:
-                    self.log_callback(
-                        f"✅ Encontrou {len(truly_new_ads)} anúncios ainda não vistos")
-                    # Format the message to include title and URL
-                    formatted_ads = [
-                        f"Título: {ad['title']}\nURL: {ad['url']}" for ad in truly_new_ads]
-
+                    self.log_callback(f"✅ Encontrou {len(truly_new_ads)} anúncios ainda não vistos")
+                    formatted_ads = [f"Título: {ad['title']}\nURL: {ad['url']}" for ad in truly_new_ads]
                     try:
-                        # Split messages into batches of 20
                         messages = self._split_message(formatted_ads)
                         for msg in messages:
                             self.telegram_bot.send_message(self.chat_id, msg)
-                            time.sleep(1)  # Avoid rate limiting
-                        # Only if sending works, add the new ad hashes to file
-                        # IMPORTANT this is the persistance mechanism
+                            time.sleep(1)
                         for ad_hash in truly_new_ads_hash:
                             self._save_ad_hash(ad_hash)
                     except Exception as e:
-                        self.log_callback(
-                            f"❌ Erro ao enviar mensagens para Telegram: {str(e)}")
-                    self.log_callback(
-                        f"✅ Enviados {len(truly_new_ads)} novos anúncios para Telegram")
+                        self.log_callback(f"❌ Erro ao enviar mensagens para Telegram: {str(e)}")
+                    self.log_callback(f"✅ Enviados {len(truly_new_ads)} novos anúncios para Telegram")
                 else:
                     self.log_callback("ℹ️ Nenhum anúncio novo encontrado")
+
             except Exception as e:
                 self.log_callback(f"❌ Erro durante verificação: {str(e)}")
+                self._adjust_interval(False)
 
             seconds_in_minute = 60
-            minutes_to_wait = 1
-            seconds_to_wait = minutes_to_wait * seconds_in_minute  # 30 minutes
+            seconds_to_wait = self.current_interval_minutes * seconds_in_minute
 
-            # seconds_to_wait = 15  # 15 seconds
-            # Wait with countdown
             if self.running:
-                self.log_callback(
-                    f"⏳ Aguardando próxima verificação ({seconds_to_wait/60} minutos)...")
-                for i in range(seconds_to_wait):  # Count down seconds
+                self.log_callback(f"⏳ Aguardando próxima verificação ({self.current_interval_minutes} minutos)...")
+                for i in range(seconds_to_wait):
                     if not self.running:
                         break
                     time.sleep(1)
 
     def _split_message(self, ads):
-        """Split ads into batches and format them into messages"""
         messages = []
         for i in range(0, len(ads), self.batch_size):
             batch = ads[i:i + self.batch_size]
@@ -178,6 +171,5 @@ class Monitor:
         return messages
 
     def stop(self):
-        """Stops the monitoring."""
         self.running = False
         self.log_callback("🛑 Comando de parada enviado...")

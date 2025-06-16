@@ -79,9 +79,11 @@
             })
             .then(data => {
                 const logOutput = document.getElementById('logOutput');
-                logOutput.textContent = data || 'Nenhum log disponível';
-                // Auto-scroll para o final dos logs
-                logOutput.scrollTop = logOutput.scrollHeight;
+                // Filter out lines containing "GET /logs HTTP/1.1" 200
+                const filteredData = data.split('\n').filter(line => !line.includes('GET /logs HTTP/1.1" 200')).join('\n');
+                logOutput.textContent = filteredData || 'Nenhum log disponível';
+                // Remove or comment out the auto-scroll line
+                // logOutput.scrollTop = logOutput.scrollHeight;
             })
             .catch(error => {
                 console.error('Erro ao carregar logs:', error);
