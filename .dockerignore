@@ -1,0 +1,17 @@
+.git/
+.gitignore
+*.pyc
+__pycache__/
+*.swp
+*.swo
+.DS_Store
+trechos_html
+dist/*
+build/*
+MarketRoxoMonitor.spec
+app.log
+venv_*
+
+# Special handling for .env
+!.env
+*.env

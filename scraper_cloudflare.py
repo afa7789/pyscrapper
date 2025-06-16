@@ -162,7 +162,8 @@ class MarketRoxoScraperCloudflare:
                 
                 # Verifica se chegou ao fim
                 if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
-                    self.log_callback("🔚 Fim das páginas disponíveis.")
+                    self.log_callback(f"🔚 Páginade anúncios não encotrados. url:{url}")
+                    # self.log_callback("🔚 Fim das páginas disponíveis.")
                     break
                 
                 new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
@@ -208,7 +209,7 @@ class MarketRoxoScraperCloudflare:
         Returns:
             list: List of valid ads found
         """
-        debug = True  # Set this to False to disable debug logging
+        debug = False  # Set this to False to disable debug logging
         ads = []
         
         if debug:

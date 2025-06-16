@@ -114,3 +114,12 @@ gunicorn -w 4 -b 0.0.0.0:5000 server:app
     pip install autopep8
     autopep8 --in-place --recursive .
 ```
+
+# Docker for local testing
+
+```
+    docker build -t my-python-app .
+    docker run -p 5000:5000 -v $(pwd):/app my-python-app
+    docker run -p 5000:5000 --env-file .env my-python-app
+    docker run -p 5000:5000 -v $(pwd):/app -w /app my-python-app python server.py --reload
+```
