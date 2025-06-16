@@ -5,19 +5,19 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import cloudscraper
 from fake_useragent import UserAgent
-import pickle
-import os
+import json
 
 class MarketRoxoScraperCloudflare:
     def __init__(self, log_callback, base_url, proxies=""):
+        """Initializes the scraper with the base URL and headers."""
         if not callable(log_callback):
             raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
         
         self.base_url = base_url
         self.log_callback = log_callback
-        self.session_file = "cf_session.pkl"
-        self.session_timeout = 1800  # 30 minutes
+        # self.proxies = self._setup_proxies(proxies)
         
+        # Inicializa o cloudscraper que bypassa Cloudflare automaticamente
         self.scraper = cloudscraper.create_scraper(
             browser={
                 'browser': 'chrome',
@@ -25,56 +25,41 @@ class MarketRoxoScraperCloudflare:
                 'desktop': True
             }
         )
-        self.session_start_time = time.time()
-        self._load_session()
         
+        # Setup de User Agents rotativos
         self.ua = UserAgent()
         self._setup_headers()
         
-        self.delay_min = 30  # Increased delay
-        self.delay_max = 60
+        # Delay entre requests para parecer mais humano
+        self.delay_min = 15
+        self.delay_max = 35
         
         self.log_callback(f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
 
-    def _load_session(self):
-        try:
-            if os.path.exists(self.session_file):
-                with open(self.session_file, 'rb') as f:
-                    cookies = pickle.load(f)
-                    self.scraper.cookies.update(cookies)
-                    self.log_callback(f"🍪 Sessão anterior carregada com {len(cookies)} cookies")
-            else:
-                self.log_callback("ℹ️ Nenhum arquivo de sessão encontrado, iniciando nova sessão")
-        except Exception as e:
-            self.log_callback(f"⚠️ Erro ao carregar sessão: {e}")
-            self._reset_session()
-
-    def _save_session(self):
-        try:
-            with open(self.session_file, 'wb') as f:
-                pickle.dump(self.scraper.cookies, f)
-            self.log_callback(f"🍪 Sessão salva com {len(self.scraper.cookies)} cookies")
-        except Exception as e:
-            self.log_callback(f"⚠️ Erro ao salvar sessão: {e}")
-
-    def _reset_session(self):
-        self.log_callback("🔄 Resetando sessão...")
-        if os.path.exists(self.session_file):
-            os.remove(self.session_file)
-        self.scraper = cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'desktop': True
-            }
-        )
-        self.session_start_time = time.time()
-        self.log_callback("✅ Nova sessão criada")
-
-    def _is_session_expired(self):
-        return (time.time() - self.session_start_time) > self.session_timeout
+    # def _setup_proxies(self, proxies):
+    #     """Configura proxies se fornecidos"""
+    #     if proxies and proxies != "":
+    #         if isinstance(proxies, str):
+    #             # Assume formato "user:pass@ip:port" ou "ip:port"
+    #             if '@' in proxies:
+    #                 auth, server = proxies.split('@')
+    #                 username, password = auth.split(':')
+    #                 ip, port = server.split(':')
+    #                 return {
+    #                     'http': f'http://{username}:{password}@{ip}:{port}',
+    #                     'https': f'http://{username}:{password}@{ip}:{port}'
+    #                 }
+    #             else:
+    #                 ip, port = proxies.split(':')
+    #                 return {
+    #                     'http': f'http://{ip}:{port}',
+    #                     'https': f'http://{ip}:{port}'
+    #                 }
+    #         return proxies
+    #     return None
 
     def _setup_headers(self):
+        """Configura headers realistas para evitar detecção"""
         self.base_headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
@@ -86,78 +71,80 @@ class MarketRoxoScraperCloudflare:
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0',
-            'sec-ch-ua': '"Brave";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"'
+            'Cache-Control': 'max-age=0'
         }
 
     def _get_random_headers(self):
+        """Gera headers aleatórios para cada request"""
         headers = self.base_headers.copy()
         headers['User-Agent'] = self.ua.random
+        
+        # Adiciona alguns headers extras aleatoriamente
+        if random.choice([True, False]):
+            headers['X-Forwarded-For'] = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+        
         return headers
 
     def _build_query(self, keywords):
+        """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
         unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
         query = "+".join(unique_keywords)
         return query
 
     def _random_delay(self):
+        """Delay aleatório entre requests"""
         delay = random.uniform(self.delay_min, self.delay_max)
         self.log_callback(f"⏳ Aguardando {delay:.1f}s...")
         time.sleep(delay)
 
-    def _make_fallback_request(self, url, headers):
-        try:
-            session = requests.Session()
-            session.headers.update(headers)
-            response = session.get(url, timeout=30)
-            response.raise_for_status()
-            self.log_callback(f"✅ Fallback request bem-sucedido: {response.status_code}")
-            return response
-        except Exception as e:
-            self.log_callback(f"❌ Fallback request falhou: {str(e)}")
-            return None
-
     def _make_request(self, url, max_retries=3):
-        if self._is_session_expired():
-            self._reset_session()
-
+        """Faz request com retry e bypass Cloudflare"""
         for attempt in range(max_retries):
             try:
                 headers = self._get_random_headers()
+                
+                # Configura o scraper com novos headers
                 self.scraper.headers.update(headers)
+                
                 self.log_callback(f"🌐 Fazendo request para: {url}")
                 self.log_callback(f"📋 Headers: {headers}")
                 self.log_callback(f"🍪 Cookies: {self.scraper.cookies.get_dict()}")
-                response = self.scraper.get(url, timeout=30)
+                
+                # Usa proxy se disponível
+                response = self.scraper.get(url, proxies=self.proxies, timeout=30) if self.proxies else self.scraper.get(url, timeout=30)
+                
                 response.raise_for_status()
-
+                
+                # Verifica se não foi bloqueado pelo Cloudflare
                 if "cloudflare" in response.text.lower() and ("blocked" in response.text.lower() or "captcha" in response.text.lower()):
                     raise Exception("Bloqueado pelo Cloudflare")
+                
+                # Verifica se a página contém anúncios
                 if "data-testid=\"ad-card-link\"" not in response.text and len(response.text) > 1000:
                     self.log_callback(f"⚠️ Página incompleta detectada (sem anúncios)")
-                    self._reset_session()
                     raise Exception("Página incompleta sem anúncios")
                 
                 self.log_callback(f"✅ Request bem-sucedido: {response.status_code}")
-                self._save_session()
                 return response
-
+                
             except Exception as e:
                 self.log_callback(f"❌ Tentativa {attempt + 1} falhou: {str(e)}")
                 if attempt < max_retries - 1:
-                    if str(e).startswith("403") or "Página incompleta" in str(e):
-                        self._reset_session()
-                    time.sleep(random.uniform(60, 120))  # Increased retry delay
+                    # Delay maior entre tentativas
+                    time.sleep(random.uniform(60, 120))  # Increased
+                    # Recria o scraper para nova sessão
+                    self.scraper = cloudscraper.create_scraper(
+                        browser={
+                            'browser': random.choice(['chrome', 'firefox']),
+                            'platform': random.choice(['windows', 'linux', 'darwin']),
+                            'desktop': True
+                        }
+                    )
                 else:
-                    self.log_callback("🔄 Tentando fallback request...")
-                    response = self._make_fallback_request(url, headers)
-                    if response:
-                        return response
                     raise e
 
-    def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=True):
+    def scrape(self, keywords, negative_keywords_list, max_pages=5, save_page=False):
+        """Searches for ads across multiple MarketRoxo pages."""
         query = self._build_query(keywords)
         ads = []
         page = 1
@@ -177,7 +164,13 @@ class MarketRoxoScraperCloudflare:
                         f.write(str(soup))
                     self.log_callback(f"💾 Página {page} salva.")
                 
-                new_ads = self._extract_ads(soup, keywords, negative_keywords_list, url)
+                # Verifica se chegou ao fim
+                if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
+                    self.log_callback(f"🔚 Páginade anúncios não encotrados. url:{url}")
+                    # self.log_callback("🔚 Fim das páginas disponíveis.")
+                    break
+                
+                new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
                 
                 if new_ads:
                     self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page}.")
@@ -187,12 +180,9 @@ class MarketRoxoScraperCloudflare:
                 
                 page += 1
                 
+                # Delay antes da próxima página
                 if page <= max_pages:
                     self._random_delay()
-
-                if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
-                    self.log_callback(f"🔚 Páginade anúncios não encotrados. url:{url}")
-                    break
                 
             except Exception as e:
                 self.log_callback(f"💥 Erro na página {page}: {e}")
@@ -202,17 +192,28 @@ class MarketRoxoScraperCloudflare:
         return ads
 
     def _log_found_ad_to_file(self, page_url, ad_title, ad_url):
+        """Logs found ads to a secondary file."""
         try:
             with open("found_ads.log", "a", encoding="utf-8") as f:
                 f.write(f"Página: {page_url}\n")
                 f.write(f"Título do Anúncio: {ad_title}\n")
                 f.write(f"Link do Anúncio: {ad_url}\n")
-                f.write("-" * 50 + "\n")
+                f.write("-" * 50 + "\n") # Separator for readability
         except Exception as e:
             self.log_callback(f"❌ Erro ao escrever no arquivo found_ads.log: {e}")
 
     def _extract_ads(self, soup, keywords, negative_keywords_list=None, page_url=""):
-        debug = True
+        """
+        Extracts ads from an HTML page.
+        Args:
+            soup (BeautifulSoup): The BeautifulSoup object of the page.
+            keywords (list): List of positive keywords.
+            negative_keywords_list (list, optional): List of negative keywords. Defaults to None.
+            page_url (str, optional): The URL of the page being scraped. Defaults to "".
+        Returns:
+            list: List of valid ads found
+        """
+        debug = False  # Set this to False to disable debug logging
         ads = []
         
         if debug:
@@ -226,6 +227,7 @@ class MarketRoxoScraperCloudflare:
         if debug:
             self.log_callback(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
         
+        # Initialize counters for logging
         positive_matches_count = 0
         negative_matches_count = 0
         not_valid_or_invalid_count = 0
@@ -244,8 +246,13 @@ class MarketRoxoScraperCloudflare:
             self._log_found_ad_to_file(page_url, ad_title, ad_url)
             
             match_positive, match_negative = self._check_keyword_matches(
-                ad_title, keywords, negative_keywords_list, debug)
+                ad_title, 
+                keywords, 
+                negative_keywords_list,
+                debug
+            )
             
+            # Update counters
             positive_matches_count += 1 if match_positive else 0
             negative_matches_count += 1 if match_negative else 0
             
@@ -260,26 +267,29 @@ class MarketRoxoScraperCloudflare:
                     self.log_callback("🚫 Anúncio IGNORADO (não atendeu aos critérios de correspondência positiva e/ou negativa).")
         
         self._log_extraction_summary(
-            len(ads), positive_matches_count, negative_matches_count, not_valid_or_invalid_count)
+            len(ads),
+            positive_matches_count,
+            negative_matches_count,
+            not_valid_or_invalid_count
+        )
         
         return ads
 
     def _log_debug_info(self, soup, keywords, negative_keywords_list, page_url):
+        """Log debug information about the extraction process"""
         self.log_callback(f"🔍 Iniciando extração de anúncios da página: {page_url}")
         self.log_callback(f"📌 Palavras-chave positivas: {keywords}")
         self.log_callback(f"📌 Palavras-chave negativas: {negative_keywords_list or 'Nenhuma'}")
         self.log_callback(f"📄 Tamanho do HTML: {len(str(soup))} caracteres")
 
     def _find_ad_links(self, soup, debug=False):
+        """Find ad links in the page using multiple possible selectors"""
         selectors = [
-            "a[data-testid='ad-card-link']",
-            "a.fnmrjs-0",
-            "a[href*='/v-']",
-            "a.olx-ad-card__link-wrapper",
-            "a.olx-adcard__link",
-            "a[data-lurker_list_id]",
-            "a.sc-jrQzAO",
-            "a[class*='ad-card']"  # Broader selector
+            "a[data-testid='ad-card-link']",  # Novo seletor OLX
+            "a.fnmrjs-0",  # Outro seletor possível
+            "a[href*='/v-']",  # Links de anúncios
+            "a.olx-ad-card__link-wrapper",  # Seletor alternativo
+            "a.olx-adcard__link"  # Seletor original
         ]
         
         for selector in selectors:
@@ -292,17 +302,21 @@ class MarketRoxoScraperCloudflare:
         return []
 
     def _handle_no_ads_found(self, soup):
+        """Handle case when no ads are found"""
         self.log_callback("⚠️ Nenhum link de anúncio encontrado com os seletores conhecidos")
+        # Debug: save the page for analysis
         with open("debug_no_ads.html", "w", encoding="utf-8") as f:
             f.write(str(soup))
 
     def _extract_ad_details(self, link, debug=False):
+        """Extract URL and title from an ad link"""
         ad_url = link.get("href")
+        
+        # Try different ways to get the title
         ad_title = (
             link.get("title") or 
             link.get("aria-label") or 
             (link.find("h2") and link.find("h2").get_text(strip=True)) or
-            (link.find("h6") and link.find("h6").get_text(strip=True)) or
             (link.find("span") and link.find("span").get_text(strip=True)) or
             ""
         ).lower()
@@ -314,12 +328,14 @@ class MarketRoxoScraperCloudflare:
         return ad_url, ad_title
 
     def _handle_invalid_ad(self, link, ad_url, ad_title):
+        """Handle invalid ads (missing URL or title)"""
         if not ad_url:
             self.log_callback(f"⚠️ Link sem URL: {link.prettify().strip()}")
         if not ad_title:
             self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
 
     def _check_keyword_matches(self, ad_title, keywords, negative_keywords_list, debug=False):
+        """Check for positive and negative keyword matches"""
         match_positive = any(keyword.lower() in ad_title for keyword in keywords)
         match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
         
@@ -337,6 +353,7 @@ class MarketRoxoScraperCloudflare:
         return match_positive, match_negative
 
     def _log_extraction_summary(self, valid_ads_count, positive_matches, negative_matches, invalid_count):
+        """Log summary of the extraction process"""
         self.log_callback(f"📊 Resumo da extração: {valid_ads_count} anúncios válidos encontrados.")
         self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches}")
         self.log_callback(f"👎 Total de títulos com palavras-chave negativas: {negative_matches}")

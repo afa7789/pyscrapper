@@ -72,7 +72,7 @@ class MainApp:
                 sys.stderr.flush()
             sys.exit(1)  # Crucial: exit after showing error
 
-    def start_monitoring(self, keywords, telegram_token, chat_input):
+    def start_monitoring(self, keywords, telegram_token, chat_input, negative_keywords, proxies):
         """Starts monitoring in a separate thread."""
         try:
             self.gui.log("🔧 Inicializando componentes...")
@@ -89,7 +89,6 @@ class MainApp:
                 raise Exception("Token do Telegram inválido!")
 
             self.gui.log("✅ Token do Telegram válido!")
-
             scraper = MarketRoxoScraper(
                 log_callback=self.gui.log,  # Pass the log callback to the scraper
                 base_url=self.base_url
@@ -97,6 +96,7 @@ class MainApp:
 
             self.monitor = Monitor(
                 keywords=keywords,
+                negative_keywords_list=negative_keywords,
                 scraper=scraper,
                 telegram_bot=telegram_bot,
                 chat_id=chat_input,

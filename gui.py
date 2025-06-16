@@ -33,6 +33,9 @@ class MarketRoxoGUI:
         self.telegram_token = os.getenv("TELEGRAM_TOKEN", "").strip()
         self.cellphone_number = os.getenv(
             "TELEGRAM_CHAT_ID_OR_PHONE", "").strip()
+        self.default_negative_keywords = os.getenv(
+            "NEGATIVE_KEYWORDS_LIST", "")
+        self.default_proxies = os.getenv("HTTP_PROXY", "") # Assuming HTTP_PROXY for simplicity, can be expanded
 
         # Create all widgets immediately
         self.create_widgets()
@@ -81,6 +84,26 @@ class MarketRoxoGUI:
         self.telegram_token_entry.insert(
             0, self.telegram_token)  # Default token
         self.telegram_token_entry.pack(pady=5, padx=20, fill='x')
+
+        # Negative Keywords section
+        neg_kw_label = tk.Label(self.root, text="Palavras-chave Negativas (separadas por vírgula):",
+                               font=("Arial", 12), bg=\'white\', fg=\'black\')
+        neg_kw_label.pack(pady=(20, 5), padx=20, anchor=\'w\')
+
+        self.negative_keywords_entry = tk.Entry(self.root, width=70, font=("Arial", 11),
+                                                bg=\'white\', fg=\'black\', relief=\'solid\', bd=1)
+        self.negative_keywords_entry.pack(pady=5, padx=20, fill=\'x\')
+        self.negative_keywords_entry.insert(0, self.default_negative_keywords)
+
+        # Proxies section
+        proxy_label = tk.Label(self.root, text="Proxy (ex: http://user:pass@host:port):",
+                              font=("Arial", 12), bg=\'white\', fg=\'black\')
+        proxy_label.pack(pady=(20, 5), padx=20, anchor=\'w\')
+
+        self.proxies_entry = tk.Entry(self.root, width=70, font=("Arial", 11),
+                                      bg=\'white\', fg=\'black\', relief=\'solid\', bd=1)
+        self.proxies_entry.pack(pady=5, padx=20, fill=\'x\')
+        self.proxies_entry.insert(0, self.default_proxies)
 
         # Chat ID section
         chat_label = tk.Label(self.root, text="Chat ID ou Número de Telefone:",
@@ -165,15 +188,16 @@ class MarketRoxoGUI:
                     "Erro", "Digite pelo menos uma palavra-chave válida!")
                 return
 
+            negative_keywords = [kw.strip() for kw in self.negative_keywords_entry.get().strip().split(",") if kw.strip()]
+
             # Update UI state
-            self.start_button.config(state=tk.DISABLED, bg='gray')
-            self.stop_button.config(state=tk.NORMAL, bg='#f44336')
+            self.start_button.config(state=tk.DISABLED, bg=\'gray\')
+            self.stop_button.config(state=tk.NORMAL, bg=\'#f44336\')
             self.status_label.config(
                 text="Status: Iniciando monitoramento...", fg="orange")
 
             # Start monitoring
-            self.start_callback(keywords_list, token, chat_input)
-
+            self.start_callback(keywords_list, token, chat_input, negative_keywords, proxies)
         except Exception as e:
             messagebox.showerror(
                 "Erro", f"Erro ao iniciar monitoramento:\n{str(e)}")
