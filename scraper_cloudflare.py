@@ -106,23 +106,18 @@ class MarketRoxoScraperCloudflare:
                 # Configura o scraper com novos headers
                 self.scraper.headers.update(headers)
                 
-                self.log_callback(f"🌐 Fazendo request para: {url}")
-                self.log_callback(f"📋 Headers: {headers}")
-                self.log_callback(f"🍪 Cookies: {self.scraper.cookies.get_dict()}")
-                
-                # Usa proxy se disponível
-                response = self.scraper.get(url, proxies=self.proxies, timeout=30) if self.proxies else self.scraper.get(url, timeout=30)
+                # # Usa proxy se disponível
+                # if self.proxies:
+                #     response = self.scraper.get(url, proxies=self.proxies, timeout=30)
+                # else:
+                    # response = self.scraper.get(url, timeout=30)
+                response = self.scraper.get(url, timeout=30)
                 
                 response.raise_for_status()
                 
                 # Verifica se não foi bloqueado pelo Cloudflare
-                if "cloudflare" in response.text.lower() and ("blocked" in response.text.lower() or "captcha" in response.text.lower()):
+                if "cloudflare" in response.text.lower() and "blocked" in response.text.lower():
                     raise Exception("Bloqueado pelo Cloudflare")
-                
-                # Verifica se a página contém anúncios
-                if "data-testid=\"ad-card-link\"" not in response.text and len(response.text) > 1000:
-                    self.log_callback(f"⚠️ Página incompleta detectada (sem anúncios)")
-                    raise Exception("Página incompleta sem anúncios")
                 
                 self.log_callback(f"✅ Request bem-sucedido: {response.status_code}")
                 return response
@@ -131,7 +126,8 @@ class MarketRoxoScraperCloudflare:
                 self.log_callback(f"❌ Tentativa {attempt + 1} falhou: {str(e)}")
                 if attempt < max_retries - 1:
                     # Delay maior entre tentativas
-                    time.sleep(random.uniform(60, 120))  # Increased
+                    time.sleep(random.uniform(10, 60))
+                    
                     # Recria o scraper para nova sessão
                     self.scraper = cloudscraper.create_scraper(
                         browser={
