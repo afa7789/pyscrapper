@@ -146,7 +146,10 @@ def start():
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
         
         # Usar o scraper automático com gestão de drivers
-        proxy = PROXIES.get("http") or PROXIES.get("https") or None
+        proxy = PROXIES.get("https") or PROXIES.get("http") or None
+        if proxy and ("http://" in proxy or "https://" in proxy):
+            # Remove 'http://' or 'https://' prefix if present
+            proxy = proxy.replace("http://", "").replace("https://", "")
         scraper = MarketRoxoScraperCloudflare(
             log_callback=logger.info, 
             base_url=BASE_URL, 

@@ -8,14 +8,14 @@ from fake_useragent import UserAgent
 import json
 
 class MarketRoxoScraperCloudflare:
-    def __init__(self, log_callback, base_url, proxies=""):
+    def __init__(self, log_callback, base_url, proxies=None):
         """Initializes the scraper with the base URL and headers."""
         if not callable(log_callback):
             raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
         
         self.base_url = base_url
         self.log_callback = log_callback
-        # self.proxies = self._setup_proxies(proxies)
+        self.proxies = self._setup_proxies(proxies)
         
         # Inicializa o cloudscraper que bypassa Cloudflare automaticamente
         self.scraper = cloudscraper.create_scraper(
@@ -23,7 +23,8 @@ class MarketRoxoScraperCloudflare:
                 'browser': 'chrome',
                 'platform': 'windows',
                 'desktop': True
-            }
+            },
+            proxies=self.proxies # Adicionado o parâmetro proxies aqui
         )
         
         # Setup de User Agents rotativos
@@ -36,27 +37,26 @@ class MarketRoxoScraperCloudflare:
         
         self.log_callback(f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
 
-    # def _setup_proxies(self, proxies):
-    #     """Configura proxies se fornecidos"""
-    #     if proxies and proxies != "":
-    #         if isinstance(proxies, str):
-    #             # Assume formato "user:pass@ip:port" ou "ip:port"
-    #             if '@' in proxies:
-    #                 auth, server = proxies.split('@')
-    #                 username, password = auth.split(':')
-    #                 ip, port = server.split(':')
-    #                 return {
-    #                     'http': f'http://{username}:{password}@{ip}:{port}',
-    #                     'https': f'http://{username}:{password}@{ip}:{port}'
-    #                 }
-    #             else:
-    #                 ip, port = proxies.split(':')
-    #                 return {
-    #                     'http': f'http://{ip}:{port}',
-    #                     'https': f'http://{ip}:{port}'
-    #                 }
-    #         return proxies
-    #     return None
+    def _setup_proxies(self, proxies):
+        """Configura proxies se fornecidos"""
+        if proxies and proxies != "":
+            if isinstance(proxies, str):
+                # Assume formato "user:pass@ip:port" ou "ip:port"
+                if '@' in proxies:
+                    # Proxy com autenticação
+                    return {
+                        'http': f'http://{proxies}',
+                        'https': f'http://{proxies}' # Cloudscraper espera http para ambos
+                    }
+                else:
+                    # Proxy sem autenticação
+                    return {
+                        'http': f'http://{proxies}',
+                        'https': f'http://{proxies}'
+                    }
+            # Se já for um dicionário, retorna como está
+            return proxies
+        return None
 
     def _setup_headers(self):
         """Configura headers realistas para evitar detecção"""
@@ -88,7 +88,8 @@ class MarketRoxoScraperCloudflare:
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
         unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
-        query = "+".join(unique_keywords)
+        random_word = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=5))
+        query = "+".join(unique_keywords) + "+" + random_word
         return query
 
     def _random_delay(self):
@@ -106,11 +107,6 @@ class MarketRoxoScraperCloudflare:
                 # Configura o scraper com novos headers
                 self.scraper.headers.update(headers)
                 
-                # # Usa proxy se disponível
-                # if self.proxies:
-                #     response = self.scraper.get(url, proxies=self.proxies, timeout=30)
-                # else:
-                    # response = self.scraper.get(url, timeout=30)
                 response = self.scraper.get(url, timeout=30)
                 
                 response.raise_for_status()
@@ -134,7 +130,8 @@ class MarketRoxoScraperCloudflare:
                             'browser': random.choice(['chrome', 'firefox']),
                             'platform': random.choice(['windows', 'linux', 'darwin']),
                             'desktop': True
-                        }
+                        },
+                        proxies=self.proxies # Adicionado o parâmetro proxies aqui
                     )
                 else:
                     raise e
@@ -239,7 +236,8 @@ class MarketRoxoScraperCloudflare:
                 not_valid_or_invalid_count += 1
                 continue
             
-            self._log_found_ad_to_file(page_url, ad_title, ad_url)
+            # for debug purposes, you can log the found ad to a file
+            # self._log_found_ad_to_file(page_url, ad_title, ad_url)
             
             match_positive, match_negative = self._check_keyword_matches(
                 ad_title, 
