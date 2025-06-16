@@ -197,13 +197,6 @@ class MarketRoxoScraperCloudflare:
         except Exception as e:
             self.log_callback(f"❌ Erro ao escrever no arquivo found_ads.log: {e}")
 
-    def _extract_ads_tested(self, filename, keywords, negative_keywords_list=None):
-        """Extracts ads from an HTML file by parsing its soup."""
-        with open(filename, "r", encoding="utf-8") as file:
-            content = file.read()
-        soup = BeautifulSoup(content, "html.parser")
-        return self._extract_ads(soup, keywords, negative_keywords_list)
-
     def _extract_ads(self, soup, keywords, negative_keywords_list=None, page_url=""):
         """
         Extracts ads from an HTML page.
@@ -212,18 +205,80 @@ class MarketRoxoScraperCloudflare:
             keywords (list): List of positive keywords.
             negative_keywords_list (list, optional): List of negative keywords. Defaults to None.
             page_url (str, optional): The URL of the page being scraped. Defaults to "".
+        Returns:
+            list: List of valid ads found
         """
-        # in case I want to change this function to reduce number of logs
+        debug = True  # Set this to False to disable debug logging
         ads = []
+        
+        if debug:
+            self._log_debug_info(soup, keywords, negative_keywords_list, page_url)
+        
+        found_links = self._find_ad_links(soup, debug)
+        if not found_links:
+            self._handle_no_ads_found(soup)
+            return ads
+        
+        if debug:
+            self.log_callback(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
         
         # Initialize counters for logging
         positive_matches_count = 0
         negative_matches_count = 0
         not_valid_or_invalid_count = 0
-
-        # Log keywords being used
         
-        # Tenta diferentes seletores do OLX
+        for i, link in enumerate(found_links):
+            if debug:
+                self.log_callback(f"--- Processando link {i+1}/{len(found_links)} ---")
+            
+            ad_url, ad_title = self._extract_ad_details(link, debug)
+            
+            if not ad_url or not ad_title:
+                self._handle_invalid_ad(link, ad_url, ad_title)
+                not_valid_or_invalid_count += 1
+                continue
+            
+            self._log_found_ad_to_file(page_url, ad_title, ad_url)
+            
+            match_positive, match_negative = self._check_keyword_matches(
+                ad_title, 
+                keywords, 
+                negative_keywords_list,
+                debug
+            )
+            
+            # Update counters
+            positive_matches_count += 1 if match_positive else 0
+            negative_matches_count += 1 if match_negative else 0
+            
+            if match_positive and not match_negative:
+                full_url = urljoin(self.base_url, ad_url)
+                ads.append({"title": ad_title, "url": full_url})
+                if debug:
+                    self.log_callback(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
+            else:
+                not_valid_or_invalid_count += 1
+                if debug:
+                    self.log_callback("🚫 Anúncio IGNORADO (não atendeu aos critérios de correspondência positiva e/ou negativa).")
+        
+        self._log_extraction_summary(
+            len(ads),
+            positive_matches_count,
+            negative_matches_count,
+            not_valid_or_invalid_count
+        )
+        
+        return ads
+
+    def _log_debug_info(self, soup, keywords, negative_keywords_list, page_url):
+        """Log debug information about the extraction process"""
+        self.log_callback(f"🔍 Iniciando extração de anúncios da página: {page_url}")
+        self.log_callback(f"📌 Palavras-chave positivas: {keywords}")
+        self.log_callback(f"📌 Palavras-chave negativas: {negative_keywords_list or 'Nenhuma'}")
+        self.log_callback(f"📄 Tamanho do HTML: {len(str(soup))} caracteres")
+
+    def _find_ad_links(self, soup, debug=False):
+        """Find ad links in the page using multiple possible selectors"""
         selectors = [
             "a[data-testid='ad-card-link']",  # Novo seletor OLX
             "a.fnmrjs-0",  # Outro seletor possível
@@ -232,129 +287,69 @@ class MarketRoxoScraperCloudflare:
             "a.olx-adcard__link"  # Seletor original
         ]
         
-        found_links = []
         for selector in selectors:
             links = soup.select(selector)
             if links:
-                found_links = links
-                # log_cb(f"🔍 Usando seletor: {selector} ({len(links)} links)")
-                break
+                if debug:
+                    self.log_callback(f"🔍 Usando seletor: {selector} ({len(links)} links)")
+                return links
         
-        if not found_links:
-            self.log_callback("⚠️ Nenhum link de anúncio encontrado com os seletores conhecidos")
-            # Debug: salva a página para análise
-            with open("debug_no_ads.html", "w", encoding="utf-8") as f:
-                f.write(str(soup))
-            return ads
+        return []
+
+    def _handle_no_ads_found(self, soup):
+        """Handle case when no ads are found"""
+        self.log_callback("⚠️ Nenhum link de anúncio encontrado com os seletores conhecidos")
+        # Debug: save the page for analysis
+        with open("debug_no_ads.html", "w", encoding="utf-8") as f:
+            f.write(str(soup))
+
+    def _extract_ad_details(self, link, debug=False):
+        """Extract URL and title from an ad link"""
+        ad_url = link.get("href")
         
-        # self.log_callback(f"🔗 Total de links de anúncios encontrados para processar: {len(found_links)}")
+        # Try different ways to get the title
+        ad_title = (
+            link.get("title") or 
+            link.get("aria-label") or 
+            (link.find("h2") and link.find("h2").get_text(strip=True)) or
+            (link.find("span") and link.find("span").get_text(strip=True)) or
+            ""
+        ).lower()
+        
+        if debug:
+            self.log_callback(f"URL do anúncio: {ad_url}")
+            self.log_callback(f"Título do anúncio (processado): '{ad_title}'")
+        
+        return ad_url, ad_title
 
-        for i, link in enumerate(found_links):
-            ad_url = link.get("href")
-            
-            # Tenta diferentes formas de obter o título
-            ad_title = (
-                link.get("title") or 
-                link.get("aria-label") or 
-                (link.find("h2") and link.find("h2").get_text(strip=True)) or
-                (link.find("span") and link.find("span").get_text(strip=True)) or
-                ""
-            ).lower()
-            
-            has_ad_url = bool(ad_url)
-            has_ad_title = bool(ad_title)
-            
-            # log_cb(f"--- Processando link {i+1}/{len(found_links)} ---")
-            # log_cb(f"URL do anúncio: {ad_url}")
-            # log_cb(f"Título do anúncio (processado): '{ad_title}'")
+    def _handle_invalid_ad(self, link, ad_url, ad_title):
+        """Handle invalid ads (missing URL or title)"""
+        if not ad_url:
+            self.log_callback(f"⚠️ Link sem URL: {link.prettify().strip()}")
+        if not ad_title:
+            self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
 
-            if has_ad_url and has_ad_title:
-                self._log_found_ad_to_file(
-                    page_url, 
-                    ad_title,
-                    ad_url
-                )
-                match_positive = any(keyword.lower() in ad_title for keyword in keywords)
-                match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
-                
-                # Increment counters based on matches
-                if match_positive:
-                    positive_matches_count += 1
-                #     log_cb(f"✅ Título '{ad_title}' CORRESPONDE a uma palavra-chave POSITIVA.")
-                # else:
-                #     log_cb(f"❌ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave POSITIVA.")
-                
-                if match_negative:
-                    negative_matches_count += 1
-                #     log_cb(f"❌ Título '{ad_title}' CORRESPONDE a uma palavra-chave NEGATIVA.")
-                # else:
-                #     log_cb(f"✅ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave NEGATIVA.")
-
-
-                if match_positive and not match_negative:
-                    full_url = urljoin(self.base_url, ad_url)
-                    ads.append({"title": ad_title, "url": full_url})
-                    # log_cb(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
-                    # Log to secondary file
-                    # self._log_found_ad_to_file(page_url, ad_title, full_url)
-                else:
-                    not_valid_or_invalid_count += 1
-                #     self.log_callback(f"🚫 Anúncio IGNORADO (não atendeu aos critérios de correspondência positiva e/ou negativa).")
+    def _check_keyword_matches(self, ad_title, keywords, negative_keywords_list, debug=False):
+        """Check for positive and negative keyword matches"""
+        match_positive = any(keyword.lower() in ad_title for keyword in keywords)
+        match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
+        
+        if debug:
+            if match_positive:
+                self.log_callback(f"✅ Título '{ad_title}' CORRESPONDE a uma palavra-chave POSITIVA.")
             else:
-                if not has_ad_url:
-                    self.log_callback(f"⚠️ Link sem URL: {link.prettify().strip()}")
-                if not has_ad_title:
-                    self.log_callback(f"⚠️ Link sem título detectável: {link.prettify().strip()}")
-            # log_cb(f"---------------------------------------------")
-        # Log the final counts
-        self.log_callback(f"📊 Resumo da extração: {len(ads)} anúncios válidos encontrados.")
-        self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches_count}")
-        self.log_callback(f"👎 Total de títulos com palavras-chave negativas: {negative_matches_count}")
-        self.log_callback(f"🚫 Total de anúncios não válidos ou inválidos: {not_valid_or_invalid_count}")
-        
-        return ads
-
-    def _non_extracted_ads_tested(self, filename, keywords, negative_keywords_list=None):
-        """Extracts ads that do not match the keywords from an HTML file."""
-        with open(filename, "r", encoding="utf-8") as file:
-            content = file.read()
-        soup = BeautifulSoup(content, "html.parser")
-        return self._non_extracted_ads(soup, keywords, negative_keywords_list)
-
-    def _non_extracted_ads(self, soup, keywords, negative_keywords_list=None):
-        _non_extracted_ads = []
-        
-        # Usa os mesmos seletores da função _extract_ads
-        selectors = [
-            "a[data-testid='ad-card-link']",
-            "a.fnmrjs-0",
-            "a[href*='/v-']",
-            "a.olx-ad-card__link-wrapper",
-            "a.olx-adcard__link"
-        ]
-        
-        found_links = []
-        for selector in selectors:
-            links = soup.select(selector)
-            if links:
-                found_links = links
-                break
-        
-        for link in found_links:
-            ad_url = link.get("href")
-            ad_title = (
-                link.get("title") or 
-                link.get("aria-label") or 
-                (link.find("h2") and link.find("h2").get_text(strip=True)) or
-                (link.find("span") and link.find("span").get_text(strip=True)) or
-                ""
-            ).lower()
+                self.log_callback(f"❌ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave POSITIVA.")
             
-            if ad_url and ad_title and (
-                not any(keyword.lower() in ad_title for keyword in keywords)
-                or any(negative.lower() in ad_title for negative in negative_keywords_list or [])
-            ):
-                full_url = urljoin(self.base_url, ad_url)
-                _non_extracted_ads.append({"title": ad_title, "url": full_url})
+            if match_negative:
+                self.log_callback(f"❌ Título '{ad_title}' CORRESPONDE a uma palavra-chave NEGATIVA.")
+            else:
+                self.log_callback(f"✅ Título '{ad_title}' NÃO CORRESPONDE a nenhuma palavra-chave NEGATIVA.")
         
-        return _non_extracted_ads
+        return match_positive, match_negative
+
+    def _log_extraction_summary(self, valid_ads_count, positive_matches, negative_matches, invalid_count):
+        """Log summary of the extraction process"""
+        self.log_callback(f"📊 Resumo da extração: {valid_ads_count} anúncios válidos encontrados.")
+        self.log_callback(f"👍 Total de títulos com palavras-chave positivas: {positive_matches}")
+        self.log_callback(f"👎 Total de títulos com palavras-chave negativas: {negative_matches}")
+        self.log_callback(f"🚫 Total de anúncios não válidos ou inválidos: {invalid_count}")
