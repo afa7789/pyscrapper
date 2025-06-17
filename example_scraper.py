@@ -288,7 +288,7 @@ def main():
                                     tc, 
                                     negative_keywords, 
                                     max_pages_per_scrape_call, 
-                                    max_total_calls=20): tc["name"] 
+                                    max_total_calls=100): tc["name"] 
                    for tc in test_cases}
 
         for future in as_completed(futures):

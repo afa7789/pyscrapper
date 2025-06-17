@@ -187,45 +187,100 @@ class MarketRoxoScraperCloudflare:
         self.log_callback(f"🎯 Total de anúncios encontrados: {len(ads)}")
         return ads
 
-    def scrape_err(self, keywords, negative_keywords_list, max_pages=1, save_page=False):
-        """
-        Versão de scrape para testes que lança um erro (Exception)
-        se nenhuma página de anúncios for encontrada ou se ocorrer um erro HTTP.
-        O objetivo é testar a resiliência a falhas imediatas.
-        """
-        query = self._build_query(keywords)
-        ads = []
-        page = 1 # Para este teste, geralmente queremos falha rápida, então 1 página é suficiente.
-        
-        self.log_callback(f"🚀 Iniciando scraping_err para: {query}")
-        
-        url = f"{self.base_url}/brasil?q={query}&o={page}" if page > 1 else f"{self.base_url}/brasil?q={query}"
-        self.log_callback(f"📄 Scraping_err página {page}... {url}")
-        
-        try:
-            response = self._make_request(url)
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Verifica se chegou ao fim (simulando "página falhou")
-            if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
-                self.log_callback(f"🔚 Página de anúncios não encontrada. URL: {url}")
-                raise ValueError("No ads found on page - interpreted as page failure.") # Lança um erro explícito
-            
-            new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
-            
-            if new_ads:
-                self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page}.")
-                ads.extend(new_ads)
-            else:
-                self.log_callback(f"⚠️ Nenhum anúncio relevante na página {page} após filtragem. Interpretado como falha de página.")
-                raise ValueError("No relevant ads found after filtering - interpreted as page failure.") # Lança um erro explícito
-            
-        except Exception as e:
-            self.log_callback(f"💥 Erro em scrape_err para a página {page}: {e}")
-            raise e # Relança a exceção para ser capturada pelo teste
+    def scrape_err(self, keywords, negative_keywords_list=None, max_pages=1, save_page=False):
+        # ... (seu código existente) ...
 
-        self.log_callback(f"🎯 Total de anúncios encontrados por scrape_err: {len(ads)}")
-        return ads
+        collected_ads = []
+        parsed_urls = set() # Para evitar reprocessar a mesma URL em caso de redirecionamento ou loop
+        
+        # Gera a string de keywords para a URL
+        search_query = "+".join(keywords)
+        self.log_callback(f"🚀 Iniciando scraping para: {search_query}")
+
+        for page_num in range(1, max_pages + 1):
+            url = f"{self.base_url}/brasil?q={search_query}"
+            if page_num > 1:
+                url += f"&o={page_num}"
+            
+            self.log_callback(f"📄 Scraping página {page_num}... {url}")
+            
+            if url in parsed_urls:
+                self.log_callback(f"⚠️ URL já processada, pulando: {url}")
+                break
+            parsed_urls.add(url)
+
+            try:
+                # Usa o cloudscraper para fazer a requisição
+                response = self.scraper.get(url, headers=self.headers, proxies=self.proxies)
+                response.raise_for_status()  # Levanta HTTPError para 4XX/5XX
+                self.log_callback(f"✅ Request bem-sucedido: {response.status_code}")
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # --- INÍCIO DA MODIFICAÇÃO PARA DEBUG ---
+                # Aumenta a granularidade do log para ver o que está sendo extraído
+                found_ads_on_page = []
+                for ad_div in soup.select('ul.sc-1fcmfeb-0.kpMXuJ > li'): # Seletor principal para anúncios
+                    try:
+                        title_tag = ad_div.select_one('h2.sc-1fcmfeb-0.dkQhY') # Seletor de título
+                        url_tag = ad_div.select_one('a.sc-1fcmfeb-0.chDgpK') # Seletor de URL
+
+                        if title_tag and url_tag:
+                            title = title_tag.text.strip()
+                            ad_url = urljoin(self.base_url, url_tag['href'])
+                            
+                            # Verifica palavras-chave positivas e negativas
+                            match_positive, match_negative = self._check_keyword_matches(
+                                title, keywords, negative_keywords_list
+                            )
+
+                            if match_positive and not match_negative:
+                                found_ads_on_page.append({"title": title, "url": ad_url})
+                                # self.log_callback(f"✅ Anúncio válido encontrado: {title}") # Log granular
+                            # else:
+                                # self.log_callback(f"❌ Anúncio descartado (filtro): {title}") # Log granular
+                    except Exception as e:
+                        # self.log_callback(f"⚠️ Erro ao processar div de anúncio: {e}") # Log granular
+                        pass # Ignora divs mal-formadas
+                # --- FIM DA MODIFICAÇÃO PARA DEBUG ---
+
+                if not found_ads_on_page:
+                    # Se não encontrou anúncios após a tentativa de extração
+                    # Salva o HTML para depuração
+                    debug_filename = f"debug_failed_scrape_{time.time()}.html"
+                    with open(debug_filename, "w", encoding="utf-8") as f:
+                        f.write(response.text)
+                    self.log_callback(f"🔚 Página sem anúncios encontrados. HTML salvo em: {debug_filename}. URL: {url}")
+                    raise ValueError(f"No ads found on page - interpreted as page failure.")
+                
+                # Se encontrou anúncios, adiciona à lista
+                collected_ads.extend(found_ads_on_page)
+                self.log_callback(f"✅ Encontrados {len(found_ads_on_page)} anúncios na página {page_num}.")
+
+                if page_num < max_pages:
+                    self.log_callback(f"⏳ Aguardando {self.delay_min}-{self.delay_max}s...")
+                    time.sleep(random.uniform(self.delay_min, self.delay_max))
+                
+            except requests.exceptions.HTTPError as http_err:
+                self.log_callback(f"💥 Erro HTTP: {http_err} para URL: {url}")
+                # Salva o HTML em caso de erro HTTP também
+                debug_filename = f"debug_http_error_{http_err.response.status_code}_{time.time()}.html"
+                with open(debug_filename, "w", encoding="utf-8") as f:
+                    f.write(http_err.response.text)
+                raise http_err # Re-lança para ser pego pelo chamador
+
+            except Exception as e:
+                self.log_callback(f"💥 Erro durante a requisição ou processamento: {e} para URL: {url}")
+                # Salva o HTML em caso de erro geral
+                if 'response' in locals() and response:
+                    debug_filename = f"debug_general_error_{time.time()}.html"
+                    with open(debug_filename, "w", encoding="utf-8") as f:
+                        f.write(response.text)
+                    self.log_callback(f"HTML salvo em: {debug_filename}")
+                raise e # Re-lança para ser pego pelo chamador
+        
+        self.log_callback(f"🎯 Total de anúncios encontrados: {len(collected_ads)}")
+        return collected_ads
 
 
     def _log_found_ad_to_file(self, page_url, ad_title, ad_url):
