@@ -15,7 +15,7 @@ class MarketRoxoScraperCloudflare:
         
         self.base_url = base_url
         self.log_callback = log_callback
-        # self.proxies = self._setup_proxies(proxies)
+        self.proxies = self._setup_proxies(proxies)
         
         # Inicializa o cloudscraper que bypassa Cloudflare automaticamente
         self.scraper = cloudscraper.create_scraper(
@@ -36,27 +36,27 @@ class MarketRoxoScraperCloudflare:
         
         self.log_callback(f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
 
-    # def _setup_proxies(self, proxies):
-    #     """Configura proxies se fornecidos"""
-    #     if proxies and proxies != "":
-    #         if isinstance(proxies, str):
-    #             # Assume formato "user:pass@ip:port" ou "ip:port"
-    #             if '@' in proxies:
-    #                 auth, server = proxies.split('@')
-    #                 username, password = auth.split(':')
-    #                 ip, port = server.split(':')
-    #                 return {
-    #                     'http': f'http://{username}:{password}@{ip}:{port}',
-    #                     'https': f'http://{username}:{password}@{ip}:{port}'
-    #                 }
-    #             else:
-    #                 ip, port = proxies.split(':')
-    #                 return {
-    #                     'http': f'http://{ip}:{port}',
-    #                     'https': f'http://{ip}:{port}'
-    #                 }
-    #         return proxies
-    #     return None
+    def _setup_proxies(self, proxies):
+        """Configura proxies se fornecidos"""
+        # if proxies and proxies != "":
+        #     if isinstance(proxies, str):
+        #         # Assume formato "user:pass@ip:port" ou "ip:port"
+        #         if '@' in proxies:
+        #             auth, server = proxies.split('@')
+        #             username, password = auth.split(':')
+        #             ip, port = server.split(':')
+        #             return {
+        #                 'http': f'http://{username}:{password}@{ip}:{port}',
+        #                 'https': f'http://{username}:{password}@{ip}:{port}'
+        #             }
+        #         else:
+        #             ip, port = proxies.split(':')
+        #             return {
+        #                 'http': f'http://{ip}:{port}',
+        #                 'https': f'http://{ip}:{port}'
+        #             }
+            # return proxies
+        return None
 
     def _setup_headers(self):
         """Configura headers realistas para evitar detecção"""
@@ -211,7 +211,7 @@ class MarketRoxoScraperCloudflare:
 
             try:
                 # Usa o cloudscraper para fazer a requisição
-                response = self.scraper.get(url, headers=self.headers, proxies=self.proxies)
+                response = self.scraper.get(url, proxies=self.proxies)
                 response.raise_for_status()  # Levanta HTTPError para 4XX/5XX
                 self.log_callback(f"✅ Request bem-sucedido: {response.status_code}")
                 
@@ -247,10 +247,11 @@ class MarketRoxoScraperCloudflare:
                 if not found_ads_on_page:
                     # Se não encontrou anúncios após a tentativa de extração
                     # Salva o HTML para depuração
-                    debug_filename = f"debug_failed_scrape_{time.time()}.html"
-                    with open(debug_filename, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    self.log_callback(f"🔚 Página sem anúncios encontrados. HTML salvo em: {debug_filename}. URL: {url}")
+                    if save_page:
+                        debug_filename = f"debug_failed_scrape_{time.time()}.html"
+                        with open(debug_filename, "w", encoding="utf-8") as f:
+                            f.write(response.text)
+                        self.log_callback(f"🔚 Página sem anúncios encontrados. HTML salvo em: {debug_filename}. URL: {url}")
                     raise ValueError(f"No ads found on page - interpreted as page failure.")
                 
                 # Se encontrou anúncios, adiciona à lista
@@ -264,19 +265,21 @@ class MarketRoxoScraperCloudflare:
             except requests.exceptions.HTTPError as http_err:
                 self.log_callback(f"💥 Erro HTTP: {http_err} para URL: {url}")
                 # Salva o HTML em caso de erro HTTP também
-                debug_filename = f"debug_http_error_{http_err.response.status_code}_{time.time()}.html"
-                with open(debug_filename, "w", encoding="utf-8") as f:
-                    f.write(http_err.response.text)
+                if save_page:
+                    debug_filename = f"debug_http_error_{http_err.response.status_code}_{time.time()}.html"
+                    with open(debug_filename, "w", encoding="utf-8") as f:
+                        f.write(http_err.response.text)
                 raise http_err # Re-lança para ser pego pelo chamador
 
             except Exception as e:
                 self.log_callback(f"💥 Erro durante a requisição ou processamento: {e} para URL: {url}")
                 # Salva o HTML em caso de erro geral
                 if 'response' in locals() and response:
-                    debug_filename = f"debug_general_error_{time.time()}.html"
-                    with open(debug_filename, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    self.log_callback(f"HTML salvo em: {debug_filename}")
+                    if save_page:
+                        debug_filename = f"debug_general_error_{time.time()}.html"
+                        with open(debug_filename, "w", encoding="utf-8") as f:
+                            f.write(response.text)
+                        self.log_callback(f"HTML salvo em: {debug_filename}")
                 raise e # Re-lança para ser pego pelo chamador
         
         self.log_callback(f"🎯 Total de anúncios encontrados: {len(collected_ads)}")
