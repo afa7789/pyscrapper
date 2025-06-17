@@ -12,3 +12,5 @@ MarketRoxoMonitor.spec
 .DS_Store
 app.log
 venv_*
+scraper_test_errors.log
+*stress_test_results.json

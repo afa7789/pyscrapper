@@ -15,7 +15,7 @@ from tqdm import tqdm
 from scraper_cloudflare import MarketRoxoScraperCloudflare
 
 # CONSTANTE: número de execuções do teste
-NUM_TESTS = 10
+NUM_TESTS = 1000
 
 def setup_logging():
     """Configura logging para arquivo de erros."""
@@ -109,6 +109,7 @@ def main():
     error_count = 0
     success_ids = []
     error_types_counts = {}
+    error_types_msg = {}
     results = [] # Para armazenar os resultados brutos de cada teste
 
     log_callback(f"🚀 Iniciando {NUM_TESTS} testes sequenciais com MarketRoxo Scraper (modo teste)")
@@ -125,6 +126,7 @@ def main():
         else:
             error_count += 1
             error_types_counts[result["error_type"]] = error_types_counts.get(result["error_type"], 0) + 1
+            error_types_msg[result["error_type"]] = result["error_msg"]
             delay_seconds = min(delay_seconds + 5, max_delay)  # Incrementa delay, com limite
 
         # Log de progresso do delay, visível mesmo com effective_callback silencioso
@@ -140,7 +142,7 @@ def main():
     log_callback(f"IDs de acertos: {sorted(success_ids)}")
     log_callback("Tipos de erro e quantidade:")
     for error, count in error_types_counts.items():
-        log_callback(f"  {error}: {count}")
+        log_callback(f"  {error}: {count} - {error_types_msg[error]} ")
 
     # A parte abaixo foi removida para atender à sua solicitação
     # log_callback("\nResumo detalhado dos erros:")
