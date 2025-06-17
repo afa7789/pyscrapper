@@ -152,13 +152,15 @@ class ProgressUpdater:
 
 def run_until_failure_test(scraper_instance, test_case, negative_keywords, 
                            max_pages_per_call=1, max_total_calls=100, 
-                           min_keywords_to_keep=2, progress_updater=None):
+                           min_keywords_to_keep=2, progress_updater=None, 
+                           success_streak_to_quit=10):
     """
     Executa um teste de scraping com estratégia avançada de retry e condições de parada aprimoradas.
 
     Condições de Parada:
     - Atingir `max_total_calls` (padrão: 100).
     - Obter `SUCCESS_STREAK_THRESHOLD` sucessos consecutivos (padrão: 5).
+    - Obter `success_streak_to_quit` sucessos consecutivos (novo, padrão: 10).
 
     A estratégia de retry é dividida em fases sequenciais, baseadas no número de falhas consecutivas:
 
@@ -179,7 +181,7 @@ def run_until_failure_test(scraper_instance, test_case, negative_keywords,
     current_keywords_for_test = list(original_keywords_base)
     
     # Limite de sucessos consecutivos para parar o teste
-    SUCCESS_STREAK_THRESHOLD = 5
+    SUCCESS_STREAK_THRESHOLD = 5 # Para resetar estratégia interna após falha
 
     # Lista para coletar os logs internos deste teste
     _test_logs = []
@@ -218,6 +220,7 @@ def run_until_failure_test(scraper_instance, test_case, negative_keywords,
     
     test_log_collector(f"\n--- In Test: {test_name} (Advanced Retry Strategy - Up to {max_total_calls} calls) ---")
     test_log_collector(f"📋 Original Keywords: {", ".join(original_keywords_base)}")
+    test_log_collector(f"🎯 Will quit after {success_streak_to_quit} consecutive successes.")
     
     # Create progress task if updater is provided
     task_description = f"Test: {test_name}"
@@ -225,7 +228,10 @@ def run_until_failure_test(scraper_instance, test_case, negative_keywords,
         progress_updater.add_task(task_description, total=max_total_calls)
 
     # Loop principal
-    while total_calls_attempted < max_total_calls and consecutive_successful_calls < SUCCESS_STREAK_THRESHOLD:
+    while total_calls_attempted < max_total_calls and \
+          consecutive_successful_calls < SUCCESS_STREAK_THRESHOLD and \
+          consecutive_successful_calls < success_streak_to_quit: # New exit condition
+        
         total_calls_attempted += 1
         
         # Update progress bar if available
@@ -348,7 +354,9 @@ def run_until_failure_test(scraper_instance, test_case, negative_keywords,
     
     # Determinar o status final do teste
     final_status = ""
-    if consecutive_successful_calls >= SUCCESS_STREAK_THRESHOLD:
+    if consecutive_successful_calls >= success_streak_to_quit: # New check for early exit
+        final_status = "SUCCESS_STREAK_QUITTED_EARLY"
+    elif consecutive_successful_calls >= SUCCESS_STREAK_THRESHOLD:
         final_status = "SUCCESS_STREAK_ACHIEVED"
     elif total_calls_attempted >= max_total_calls and not last_call_resulted_in_error:
         final_status = "COMPLETED_MAX_CALLS_WITH_SUCCESS"
@@ -372,6 +380,7 @@ def run_until_failure_test(scraper_instance, test_case, negative_keywords,
         "errors_encountered_total": errors_encountered,
         "consecutive_failures_at_end": consecutive_failures,
         "max_total_calls_configured": max_total_calls,
+        "success_streak_to_quit_configured": success_streak_to_quit, # Added to result
         "last_keywords_used": current_keywords_for_test if 'current_keywords_for_test' in locals() else original_keywords_base,
         "error_that_broke_streak": error_info,
         
@@ -417,7 +426,8 @@ def main():
     # Número de páginas para buscar por chamada de scrape (para o teste de resiliência, geralmente 1)
     max_pages_per_scrape_call = 1
 
-    max_total_calls_on_test = 15
+    max_total_calls_on_test = 30
+    success_streak_to_quit_test = 10 # New parameter for early exit
     
     # Inicializa o scraper (apenas uma instância, que será compartilhada pelas threads)
     scraper = MarketRoxoScraperCloudflare(
@@ -473,7 +483,8 @@ def main():
                                         max_pages_per_scrape_call, 
                                         max_total_calls=max_total_calls_on_test,
                                         min_keywords_to_keep=2,
-                                        progress_updater=progress_updater): tc["name"] 
+                                        progress_updater=progress_updater,
+                                        success_streak_to_quit=success_streak_to_quit_test): tc["name"] 
                        for tc in test_cases}
 
             for future in as_completed(futures):
@@ -489,6 +500,8 @@ def main():
                     main_script_log(f"  Últimas keywords usadas: {", ".join(result["last_keywords_used"])}")
                     if result["error_that_broke_streak"]:
                         main_script_log(f"  Erro que quebrou a sequência: {result["error_that_broke_streak"]}")
+                    if result["final_status"] == "SUCCESS_STREAK_QUITTED_EARLY":
+                        main_script_log(f"  Teste interrompido cedo devido a {result["success_streak_to_quit_configured"]} sucessos consecutivos.")
                     
                     main_script_log("  --- Estatísticas de Metodologia ---")
                     for method, count in result["methodology_success_count"].items():
