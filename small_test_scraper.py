@@ -25,7 +25,9 @@ def main():
     # Configuração do proxy (opcional)
     http_proxy = os.getenv("HTTP_PROXY", "")
     https_proxy = os.getenv("HTTPS_PROXY", "")
-    proxy_config = http_proxy or https_proxy or ""
+    # proxy_config = http_proxy or https_proxy or ""
+    
+    proxy_config=""
     
     # Palavras-chave para buscar (também usadas como query_keywords para a URL)
     keywords_str = "iphone,ipad,apple"
@@ -53,6 +55,9 @@ def main():
         proxies=proxy_config
     )
     
+    # def scrape_err(self, keywords, negative_keywords_list=None, query_keywords=None,
+    #                start_page=1, num_pages_to_scrape=1, save_page=False,
+    #                page_retry_attempts=3, page_retry_delay_min=5, page_retry_delay_max=15):
     # Teste inicial de scrape err c/ marketroxo, 
     try:
         print("🎯 Iniciando busca por anúncios...")
@@ -63,8 +68,12 @@ def main():
                 query_keywords=current_keywords_for_loop, 
                 keywords=current_keywords_for_loop,
                 negative_keywords_list=negative_keywords,
-                max_pages=max_pages,
-                save_page=save_page
+                start_page=1, 
+                num_pages_to_scrape=max_pages,
+                save_page=save_page,
+                page_retry_attempts=10,
+                page_retry_delay_min=30,
+                page_retry_delay_max=67
             )
             
             # Exibe resultados

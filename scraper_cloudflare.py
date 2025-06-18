@@ -8,7 +8,7 @@ from fake_useragent import UserAgent
 import json
 from itertools import permutations
 
-#  custom error for no ads found at scrape_err
+# Custom Exception for when no ads are found
 class NoAdsFoundError(Exception):
     """Custom exception raised when no ads are found on the page, especially on the first page."""
     pass
@@ -78,16 +78,20 @@ class MarketRoxoScraperCloudflare:
         }
         self.headers = self._get_random_headers() # Set initial headers for the scraper
         self.scraper.headers.update(self.headers) # Update scraper with these headers
-        self.log_callback(f"👤 User-Agent inicializado: {self.headers['User-Agent']}")
+        # self.log_callback(f"👤 User-Agent inicializado: {self.headers['User-Agent']}")
 
     def _get_random_headers(self):
-        """Gera headers aleatórios para cada request."""
+        """Gera headers aleatórios para cada request e loga o User-Agent usado."""
         headers = self.base_headers.copy()
-        headers['User-Agent'] = self.ua.random
+        new_user_agent = self.ua.random
+        headers['User-Agent'] = new_user_agent
         
         # Adiciona alguns headers extras aleatoriamente
         if random.choice([True, False]):
             headers['X-Forwarded-For'] = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+        
+        # Adição do log para cada User-Agent gerado
+        self.log_callback(f"👤 Usando User-Agent: {new_user_agent}")
         
         return headers
 
@@ -366,90 +370,108 @@ class MarketRoxoScraperCloudflare:
         except Exception as e:
             self.log_callback(f"❌ Erro ao escrever no arquivo found_ads.log: {e}")
 
-    def scrape_err(self, keywords, negative_keywords_list=None, query_keywords=None ,  max_pages=1, save_page=False):
+    def scrape_err(self, keywords, negative_keywords_list=None, query_keywords=None,
+                   start_page=1, num_pages_to_scrape=1, save_page=False,
+                   page_retry_attempts=3, page_retry_delay_min=5, page_retry_delay_max=15):
         """
-        Searches for ads across multiple MarketRoxo pages using existing robust methods.
-        This version is designed to specifically highlight scraping failures by raising exceptions.
+        Searches for ads across MarketRoxo pages, designed to highlight scraping failures by raising exceptions.
         It uses 'query_keywords' for the search URL and 'keywords' for ad filtering.
+        This version includes retries for individual page fetches.
         """
-        # Use query_keywords to build the search query for the URL
-        search_query = self._build_query(query_keywords)
+        search_query = self._build_query(query_keywords or keywords)
         collected_ads = []
 
-        if query_keywords is None:
-            query_keywords = keywords
-        
-        self.log_callback(f"🚀 Iniciando scraping para: {search_query} (query keywords)")
+        self.log_callback(f"🚀 Iniciando scraping para: {search_query} (query keywords) a partir da página {start_page} por {num_pages_to_scrape} páginas.")
 
-        for page_num in range(1, max_pages + 1):
+        for page_offset in range(num_pages_to_scrape):
+            page_num = start_page + page_offset
             url = f"{self.base_url}/brasil?q={search_query}"
             if page_num > 1:
                 url += f"&o={page_num}"
             
             self.log_callback(f"📄 Scraping página {page_num}... {url}")
             
-            try:
-                response = self._make_request(url)
-                
-                # If _make_request failed after retries, it returns None.
-                # In scrape_err, we want to explicitly raise an error in such cases.
-                if response is None:
-                    self.log_callback(f"🛑 Não foi possível obter resposta para a página {page_num}. Falha crítica.")
-                    raise ConnectionError(f"Failed to retrieve page content after multiple retries for URL: {url}")
-                
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                if save_page:
-                    debug_filename = f"debug_page_{page_num}.html"
-                    with open(debug_filename, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                    self.log_callback(f"💾 Página {page_num} salva para depuração: {debug_filename}.")
-                
-                # Check for "no ads found" message to gracefully end or indicate a specific condition
-                no_ads_message_found = "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text
-                
-                if no_ads_message_found:
-                    self.log_callback(f"🔚 Página {page_num} indica fim dos anúncios ou nenhum resultado. URL: {url}")
-                    # If no ads are found on the first page, and that's considered a "scrape failure"
-                    if page_num == 1:
-                        raise NoAdsFoundError(f"No ads found on the first page for query: '{search_query}' at {url}")
-                    else:
-                        break # For subsequent pages, it's normal to hit the end
+            current_page_success = False
+            for attempt in range(page_retry_attempts):
+                try:
+                    response = self._make_request(url)
                     
-                # Reuse the _extract_ads method for parsing and filtering
-                # Pass 'keywords' and 'negative_keywords_list' for matching checks
-                new_ads = self._extract_ads(soup, keywords, negative_keywords_list, page_url=url)
-                
-                if new_ads:
-                    collected_ads.extend(new_ads)
-                    self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page_num}.")
-                else:
-                    self.log_callback(f"⚠️ Nenhum anúncio relevante encontrado na página {page_num}.")
-
-                # Apply random delay before proceeding to the next page
-                if page_num < max_pages:
-                    self._random_delay()
-                
-            except requests.exceptions.HTTPError as http_err:
-                self.log_callback(f"💥 Erro HTTP ({http_err.response.status_code}) para URL: {url}. Detalhes: {http_err}")
-                if save_page:
-                    debug_filename = f"debug_http_error_{http_err.response.status_code}_{time.time()}.html"
-                    with open(debug_filename, "w", encoding="utf-8") as f:
-                        f.write(http_err.response.text)
-                    self.log_callback(f"HTML do erro HTTP salvo em: {debug_filename}.")
-                raise http_err # Re-raise the HTTP error
-            except Exception as e:
-                # Catch NoAdsFoundError specifically so it's not re-wrapped by generic Exception
-                if isinstance(e, NoAdsFoundError):
-                    raise e
-                self.log_callback(f"💥 Erro inesperado durante o scraping da página {page_num} ({url}): {e}")
-                if 'response' in locals() and response:
+                    if response is None:
+                        self.log_callback(f"🛑 Tentativa {attempt + 1}/{page_retry_attempts} falhou para obter resposta para a página {page_num}. URL: {url}")
+                        if attempt < page_retry_attempts - 1:
+                            time.sleep(random.uniform(page_retry_delay_min, page_retry_delay_max))
+                        continue # Try next attempt for this page
+                    
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    
                     if save_page:
-                        debug_filename = f"debug_general_error_{time.time()}.html"
+                        debug_filename = f"debug_page_{page_num}.html"
                         with open(debug_filename, "w", encoding="utf-8") as f:
                             f.write(response.text)
-                        self.log_callback(f"HTML salvo em: {debug_filename}")
-                raise e # Re-raise any other unexpected exception
+                        self.log_callback(f"💾 Página {page_num} salva para depuração: {debug_filename}.")
+                    
+                    no_ads_message_found = "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text
+                    
+                    new_ads = self._extract_ads(soup, keywords, negative_keywords_list, page_url=url)
+                    
+                    if no_ads_message_found:
+                        self.log_callback(f"🔚 Página {page_num} indica fim dos anúncios ou nenhum resultado. URL: {url}")
+                        if page_offset == 0:
+                            raise NoAdsFoundError(f"No ads found on page {page_num} (explicit message) for query: '{search_query}' at {url}")
+                        else:
+                            current_page_success = True
+                            break # No more ads for this query, break from page_retry_attempts and also from page_offset loop
+                    
+                    if not new_ads and page_offset == 0:
+                        raise NoAdsFoundError(f"No relevant ads extracted on page {page_num} (implicit no results) for query: '{search_query}' at {url}")
 
-        self.log_callback(f"🎯 Total de anúncios coletados: {len(collected_ads)}")
+                    if new_ads:
+                        collected_ads.extend(new_ads)
+                        self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page_num}.")
+                        current_page_success = True
+                        break
+                    else:
+                        self.log_callback(f"⚠️ Nenhum anúncio relevante encontrado na página {page_num}.")
+                        current_page_success = True
+                        break
+
+                except NoAdsFoundError as e:
+                    self.log_callback(f"💥 NoAdsFoundError na página {page_num} (Tentativa {attempt + 1}/{page_retry_attempts}): {e}")
+                    if attempt < page_retry_attempts - 1:
+                        time.sleep(random.uniform(page_retry_delay_min, page_retry_delay_max))
+                    else:
+                        raise e
+                except requests.exceptions.HTTPError as http_err:
+                    self.log_callback(f"💥 Erro HTTP ({http_err.response.status_code}) na página {page_num} (Tentativa {attempt + 1}/{page_retry_attempts}): {http_err}")
+                    if save_page:
+                        debug_filename = f"debug_http_error_{http_err.response.status_code}_page_{page_num}_{time.time()}.html"
+                        with open(debug_filename, "w", encoding="utf-8") as f:
+                            f.write(http_err.response.text)
+                        self.log_callback(f"HTML do erro HTTP salvo em: {debug_filename}.")
+                    if attempt < page_retry_attempts - 1:
+                        time.sleep(random.uniform(page_retry_delay_min, page_retry_delay_max))
+                    else:
+                        raise http_err
+                except Exception as e:
+                    self.log_callback(f"💥 Erro inesperado na página {page_num} (Tentativa {attempt + 1}/{page_retry_attempts}): {e}")
+                    if 'response' in locals() and response:
+                        if save_page:
+                            debug_filename = f"debug_general_error_page_{page_num}_{time.time()}.html"
+                            with open(debug_filename, "w", encoding="utf-8") as f:
+                                f.write(response.text)
+                            self.log_callback(f"HTML salvo em: {debug_filename}")
+                    if attempt < page_retry_attempts - 1:
+                        time.sleep(random.uniform(page_retry_delay_min, page_retry_delay_max))
+                    else:
+                        raise e
+
+            if not current_page_success:
+                self.log_callback(f"⚠️ Todas as tentativas falharam para a página {page_num}. Prosseguindo para a próxima página ou finalizando.")
+                break
+
+            if current_page_success and page_num < (start_page + num_pages_to_scrape -1) :
+                 self._random_delay()
+
+
+        self.log_callback(f"🎯 Total de anúncios coletados nesta chamada: {len(collected_ads)}")
         return collected_ads
