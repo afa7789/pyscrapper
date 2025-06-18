@@ -53,6 +53,7 @@ def main():
         proxies=proxy_config
     )
     
+    # Teste inicial de scrape err c/ marketroxo, 
     try:
         print("🎯 Iniciando busca por anúncios...")
         for current_keywords_for_loop in array_of_keywords: # Renamed loop variable for clarity

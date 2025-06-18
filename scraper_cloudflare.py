@@ -8,6 +8,11 @@ from fake_useragent import UserAgent
 import json
 from itertools import permutations
 
+#  custom error for no ads found at scrape_err
+class NoAdsFoundError(Exception):
+    """Custom exception raised when no ads are found on the page, especially on the first page."""
+    pass
+
 class MarketRoxoScraperCloudflare:
     def __init__(self, log_callback, base_url, proxies=""):
         """Initializes the scraper with the base URL and headers."""
@@ -401,12 +406,16 @@ class MarketRoxoScraperCloudflare:
                     self.log_callback(f"💾 Página {page_num} salva para depuração: {debug_filename}.")
                 
                 # Check for "no ads found" message to gracefully end or indicate a specific condition
-                if "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text:
+                no_ads_message_found = "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text
+                
+                if no_ads_message_found:
                     self.log_callback(f"🔚 Página {page_num} indica fim dos anúncios ou nenhum resultado. URL: {url}")
                     # If no ads are found on the first page, and that's considered a "scrape failure"
-                    # you could add a condition like: `if page_num == 1: raise NoAdsFoundError(...)`
-                    break
-
+                    if page_num == 1:
+                        raise NoAdsFoundError(f"No ads found on the first page for query: '{search_query}' at {url}")
+                    else:
+                        break # For subsequent pages, it's normal to hit the end
+                    
                 # Reuse the _extract_ads method for parsing and filtering
                 # Pass 'keywords' and 'negative_keywords_list' for matching checks
                 new_ads = self._extract_ads(soup, keywords, negative_keywords_list, page_url=url)
@@ -430,6 +439,9 @@ class MarketRoxoScraperCloudflare:
                     self.log_callback(f"HTML do erro HTTP salvo em: {debug_filename}.")
                 raise http_err # Re-raise the HTTP error
             except Exception as e:
+                # Catch NoAdsFoundError specifically so it's not re-wrapped by generic Exception
+                if isinstance(e, NoAdsFoundError):
+                    raise e
                 self.log_callback(f"💥 Erro inesperado durante o scraping da página {page_num} ({url}): {e}")
                 if 'response' in locals() and response:
                     if save_page:
