@@ -46,18 +46,17 @@ class MarketRoxoScraperCloudflare:
     def _setup_proxies(self, proxies):
         """Configura proxies se fornecidos"""
         if proxies and proxies != "":
-            if isinstance(proxies, str):
-                # Assume formato "user:pass@ip:port" ou "ip:port"
-                # Simplesmente retorna o dicionário esperado por requests
-                proxy_config = {
-                    "http": f"{proxies}",
-                    "https": f"{proxies}"
-                }
-                self.log_callback(f"✅ Proxies configurados: {proxy_config}")
-                return proxy_config
-            else:
-                self.log_callback("⚠️ Formato de proxy inválido. Use uma string como 'user:pass@ip:port'.")
-                return None
+            # Assume formato "user:pass@ip:port" ou "ip:port"
+            # Simplesmente retorna o dicionário esperado por requests
+            proxy_config = {
+                "http": f"{proxies.get("http")}",
+                "https": f"{proxies.get("https")}"
+            }
+            self.log_callback(f"✅ Proxies configurados: {proxy_config}")
+            return proxy_config
+        # else:
+        #     self.log_callback("⚠️ Formato de proxy inválido. Use uma string como 'user:pass@ip:port'.")
+        #     return None
         self.log_callback("ℹ️ Nenhum proxy configurado.")
         return None
 

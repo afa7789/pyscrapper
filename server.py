@@ -150,13 +150,13 @@ def start():
         chat_input = data['chat_input']
 
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
-        proxy = PROXIES.get("https") or PROXIES.get("http") or None
-        if proxy and ("http://" in proxy or "https://" in proxy):
-            proxy = proxy.replace("http://", "").replace("https://", "")
+        # proxy = PROXIES.get("https") or PROXIES.get("http") or None
+        # if proxy and ("http://" in proxy or "https://" in proxy):
+        #     proxy = proxy.replace("http://", "").replace("https://", "")
         scraper = MarketRoxoScraperCloudflare(
             log_callback=logger.info, 
             base_url=BASE_URL, 
-            proxies=proxy,
+            proxies=PROXIES,
         )
 
         filtered_keywords = [
