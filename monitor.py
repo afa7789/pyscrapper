@@ -1,3 +1,5 @@
+# monitor.py
+
 import threading
 import time
 from datetime import datetime, timezone, timedelta
@@ -16,6 +18,7 @@ class Monitor:
         self.chat_id = chat_id
         self.log_callback = log_callback
         self.running = False
+        self.stop_event = threading.Event() # <--- ADD THIS LINE
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
@@ -79,6 +82,7 @@ class Monitor:
 
     def start(self):
         self.running = True
+        self.stop_event.clear() # <--- ADD THIS LINE: Clear the event at the start
         self.log_callback("🚀 Monitoramento iniciado!")
         # self.log_callback(f"📝 Palavras-chave: {', '.join(self.keywords)}")
         # self.log_callback(f"💬 Chat ID: {self.chat_id}")
@@ -86,7 +90,7 @@ class Monitor:
 
         cycle_count = 0
 
-        while self.running:
+        while self.running: # self.running is set to False by self.stop()
             cycle_start_time = time.time() # Start timing for the full cycle
             
             try:
@@ -109,16 +113,22 @@ class Monitor:
                     
                     seconds_until_6am = int((next_6am - current_time_gmt3).total_seconds())
                     
-                    for i in range(0, seconds_until_6am, 300):
-                        if not self.running:
-                            self.log_callback("🛑 Loop interrompido durante espera fora do horário")
+                    # --- MODIFIED SLEEP LOGIC ---
+                    # Check the stop_event more frequently
+                    for i in range(0, seconds_until_6am, 10): # Check every 10 seconds
+                        if self.stop_event.is_set(): # <--- Check the event
+                            self.running = False # <--- Set running to False to exit main loop
+                            self.log_callback("🛑 Loop interrompido durante espera fora do horário por stop_event")
                             break
                         remaining = seconds_until_6am - i
                         hours_remaining = remaining // 3600
                         minutes_remaining = (remaining % 3600) // 60
                         self.log_callback(f"💤 Aguardando horário de funcionamento - {hours_remaining:02d}:{minutes_remaining:02d} restantes")
-                        time.sleep(min(300, remaining))
+                        self.stop_event.wait(timeout=10) # <--- Use wait with timeout
         
+                    # BREAK if stopped
+                    if not self.running: # If break from above loop due to stop_event
+                        break
                     continue
                 # VERIFICAR HORARIO DE FUNCIONAMENTO
 
@@ -154,22 +164,14 @@ class Monitor:
                         page_attempt = 0
                         max_page_attempts = 100 # Max retries for a single page with this permutation
                         while not page_scrape_success and page_attempt < max_page_attempts:
-                            if not self.running:
-                                self.log_callback("🛑 Monitoramento interrompido durante raspagem de página.")
+                            if self.stop_event.is_set(): # <--- Check the event here too
+                                self.running = False
+                                self.log_callback("🛑 Monitoramento interrompido durante raspagem de página por stop_event.")
                                 break
                             page_attempt += 1
                             try:
                                 self.log_callback(f"🚀 Iniciando scraping da página {page_num} (Tentativa {page_attempt}/{max_page_attempts})")
                                 
-                                # Call scrape_err with start_page and num_pages_to_scrape=1 for current page
-                                # new_ads_from_page = self.scraper.scrape_err(
-                                #     query_keywords=perm_keywords,
-                                #     keywords=self.keywords, # Use original keywords for filtering extracted ads
-                                #     negative_keywords_list=self.negative_keywords_list,
-                                #     start_page=page_num, # Pass the current page as start_page
-                                #     num_pages_to_scrape=1, # Scrape only this single page
-                                #     save_page=False # Or self.save_page if it's a monitor config
-                                # )
                                 new_ads_from_page = self.scraper.scrape_err(
                                     query_keywords=perm_keywords,
                                     keywords=self.keywords, # Use original keywords for filtering extracted ads
@@ -190,15 +192,26 @@ class Monitor:
                                 self.log_callback(f"❌ Erro na raspagem da página {page_num} (Permutação {perm_idx + 1}, Tentativa {page_attempt}/{max_page_attempts}): {type(e).__name__} - {str(e)}")
                                 if page_attempt < max_page_attempts:
                                     retry_delay = random.uniform(5, 15) # Random delay between page retries
-                                    self.log_callback(f"⏳ Aguardando {retry_delay:.1f}s antes de tentar novamente a página {page_num}...")
-                                    time.sleep(retry_delay)
+                                    # --- MODIFIED SLEEP LOGIC ---
+                                    if self.stop_event.wait(timeout=retry_delay): # <--- Use wait with timeout
+                                        self.running = False
+                                        self.log_callback("🛑 Monitoramento interrompido durante espera de retry por stop_event.")
+                                        break
                                 else:
                                     self.log_callback(f"⚠️ Todas as {max_page_attempts} tentativas falharam para a página {page_num} da permutação {perm_idx + 1}. Prosseguindo para a próxima página/permutação.")
                                     break # Give up on this page, move to next page_num
 
-                        if not page_scrape_success:
-                            self.log_callback(f"⏭️ Pulando para a próxima permutação ou finalizando ciclo, devido a falha persistente na página {page_num}.")
+                        if not page_scrape_success or not self.running: # Check self.running after inner loop breaks
+                            self.log_callback(f"⏭️ Pulando para a próxima permutação ou finalizando ciclo, devido a falha persistente na página {page_num} ou parada solicitada.")
                             break # If a page consistently fails, move to next permutation or end
+
+                    # BREAK if stopped
+                    if not self.running: # If break from inner page loop due to stop_event
+                        break
+
+                # BREAK if stopped
+                if not self.running: # If break from permutation loop due to stop_event
+                    break
 
                 # Process all collected new ads from the current cycle (all permutations and pages)
                 truly_new_ads = []
@@ -216,13 +229,22 @@ class Monitor:
                     try:
                         messages = self._split_message(formatted_ads)
                         for msg in messages:
+                            # BREAK if stopped
+                            if not self.running: # <--- Check running flag before sending messages
+                                self.log_callback("🛑 Monitoramento interrompido antes de enviar todas as mensagens.")
+                                break
                             self.telegram_bot.send_message(self.chat_id, msg)
-                            time.sleep(1) # Small delay between sending messages
-                        for ad_hash in truly_new_ads_hash:
-                            self._save_ad_hash(ad_hash)
+                            if self.stop_event.wait(timeout=1): # <--- Small delay between sending messages, check for stop
+                                self.running = False
+                                self.log_callback("🛑 Monitoramento interrompido durante o envio de mensagens.")
+                                break
+                        if self.running: # Only save if not stopped during message sending
+                            for ad_hash in truly_new_ads_hash:
+                                self._save_ad_hash(ad_hash)
                     except Exception as e:
                         self.log_callback(f"❌ Erro ao enviar mensagens para Telegram: {str(e)}")
-                    self.log_callback(f"✅ Enviados {len(truly_new_ads)} novos anúncios para Telegram")
+                    if self.running:
+                        self.log_callback(f"✅ Enviados {len(truly_new_ads)} novos anúncios para Telegram")
                 else:
                     self.log_callback("ℹ️ Nenhum anúncio novo encontrado neste ciclo.")
 
@@ -239,11 +261,17 @@ class Monitor:
             self.log_callback(f"⏳ Aguardando próximo ciclo ({wait_time_minutes} minutos)...")
             seconds_to_wait = wait_time_minutes * 60
             
-            for i in range(seconds_to_wait):
-                if not self.running:
-                    self.log_callback("🛑 Monitoramento interrompido durante espera do ciclo.")
+            # --- MODIFIED SLEEP LOGIC ---
+            # Use wait() with a short timeout to frequently check the stop_event
+            for i in range(0, seconds_to_wait, 10): # Check every 10 seconds
+                if self.stop_event.is_set(): # <--- Check the event
+                    self.running = False # <--- Set running to False to exit main loop
+                    self.log_callback("🛑 Monitoramento interrompido durante espera do ciclo por stop_event.")
                     break
-                time.sleep(1)
+                # Only sleep for the remaining part of the 10-second chunk
+                self.stop_event.wait(timeout=10) # <--- Use wait with timeout
+
+        self.log_callback("Monitoramento finalizado.") # <--- Log when the main loop exits
 
     def _split_message(self, ads):
         messages = []
@@ -257,4 +285,5 @@ class Monitor:
 
     def stop(self):
         self.running = False
+        self.stop_event.set() # <--- ADD THIS LINE: Set the event when stop is called
         self.log_callback("🛑 Comando de parada enviado...")
