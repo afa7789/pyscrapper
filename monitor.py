@@ -127,6 +127,7 @@ class Monitor:
                 self.log_callback(f"🔍 Verificação #{cycle_count} - {current_time} (GMT-3)")
 
                 # 1.1 - Sortear 4 permutações
+                num_permutations_to_use = 1
                 # num_permutations_to_use = min(4, len(all_permutations))
                 # selected_permutations = random.sample(all_permutations, num_permutations_to_use)
                 # self.log_callback(f"🎲 Selecionadas {num_permutations_to_use} permutações de keywords para esta verificação.")
