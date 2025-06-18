@@ -176,7 +176,7 @@ class Monitor:
                                     negative_keywords_list=self.negative_keywords_list,
                                     start_page=page_num, # Pass the current page as start_page
                                     num_pages_to_scrape=max_pages_per_permutation,
-                                    save_page=save_page,
+                                    save_page=False,
                                     page_retry_attempts=1,
                                     page_retry_delay_min=30,
                                     page_retry_delay_max=67
