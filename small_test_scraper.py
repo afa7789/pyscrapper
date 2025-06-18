@@ -9,6 +9,7 @@ from scraper_cloudflare import MarketRoxoScraperCloudflare
 import json
 import os
 from dotenv import load_dotenv
+import time # Ensure time is imported for log_callback
 
 def log_callback(message):
     """Função de callback para logs"""
@@ -26,8 +27,7 @@ def main():
     https_proxy = os.getenv("HTTPS_PROXY", "")
     proxy_config = http_proxy or https_proxy or ""
     
-    # Palavras-chave para buscar
-    # keywords_str = os.getenv("DEFAULT_KEYWORDS", "bike,indoor,concept2,spinning,bicicleta,schwinn,technogym")
+    # Palavras-chave para buscar (também usadas como query_keywords para a URL)
     keywords_str = "iphone,ipad,apple"
     keywords = [kw.strip() for kw in keywords_str.split(",") if kw.strip()]
 
@@ -54,14 +54,13 @@ def main():
     )
     
     try:
-        # Executa o scraping
         print("🎯 Iniciando busca por anúncios...")
-        for keywords in array_of_keywords:
-            print(f"\n🔍 Buscando anúncios com as palavras-chave: {', '.join(keywords)}")
+        for current_keywords_for_loop in array_of_keywords: # Renamed loop variable for clarity
+            print(f"\n🔍 Buscando anúncios com as palavras-chave: {', '.join(current_keywords_for_loop)}")
             
-            # Chama o método scrape do scraper  
-            ads = scraper.scrape(
-                keywords=keywords,
+            ads = scraper.scrape_err(
+                query_keywords=current_keywords_for_loop, 
+                keywords=current_keywords_for_loop,
                 negative_keywords_list=negative_keywords,
                 max_pages=max_pages,
                 save_page=save_page
@@ -70,21 +69,7 @@ def main():
             # Exibe resultados
             print(f"\n📊 RESULTADO FINAL:")
             print(f"Total de anúncios encontrados: {len(ads)}")
-            
-            # if ads:
-            #     print("\n📋 Anúncios encontrados:")
-            #     for i, ad in enumerate(ads, 1):
-            #         print(f"{i}. {ad['title']}")
-            #         print(f"   URL: {ad['url']}")
-            #         print()
-                
-            #     # # Salva resultados em arquivo JSON
-            #     # output_file = os.getenv("OUTPUT_FILE", "anuncios_encontrados.json")
-            #     # with open(output_file, "w", encoding="utf-8") as f:
-            #     #     json.dump(ads, f, ensure_ascii=False, indent=2)
-            #     # print(f"💾 Resultados salvos em '{output_file}'")
-            # else:
-            #     print("❌ Nenhum anúncio encontrado com os critérios especificados.")    
+              
     except Exception as e:
         print(f"💥 Erro durante o scraping: {e}")
         return False
@@ -92,7 +77,6 @@ def main():
     return True
 
 if __name__ == "__main__":
-    import time
     
     print("🚀 MarketRoxo Scraper com Bypass Cloudflare")
     print("=" * 50)
