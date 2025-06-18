@@ -175,7 +175,7 @@ class Monitor:
                                     save_page=save_page,
                                     page_retry_attempts=1,
                                     page_retry_delay_min=30,
-                                    page_retry_delay_max=67
+                                    page_retry_delay_max=67,
                                     save_page=False # Or self.save_page if it's a monitor config
                                 )
                                 
