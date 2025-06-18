@@ -80,9 +80,9 @@ class Monitor:
     def start(self):
         self.running = True
         self.log_callback("🚀 Monitoramento iniciado!")
-        self.log_callback(f"📝 Palavras-chave: {', '.join(self.keywords)}")
-        self.log_callback(f"💬 Chat ID: {self.chat_id}")
-        self.log_callback("⏰ Horário de funcionamento: 06:00 - 23:00 (GMT-3)")
+        # self.log_callback(f"📝 Palavras-chave: {', '.join(self.keywords)}")
+        # self.log_callback(f"💬 Chat ID: {self.chat_id}")
+        # self.log_callback("⏰ Horário de funcionamento: 06:00 - 23:00 (GMT-3)")
 
         cycle_count = 0
 
@@ -141,7 +141,7 @@ class Monitor:
                 # acima estou evitando permutações para simplificar a tentativa em produção
                 
                     perm_keywords = list(perm_keywords_tuple) # Convert tuple to list for consistency
-                    self.log_callback(f"🔄 Processando permutação {perm_idx + 1}/{num_permutations_to_use}: {', '.join(perm_keywords)}")
+                    # self.log_callback(f"🔄 Processando permutação {perm_idx + 1}/{num_permutations_to_use}: {', '.join(perm_keywords)}")
                     
                     # 2. Iterar por páginas (máximo 3 páginas por permutação)
                     max_pages_per_permutation = 3
@@ -154,6 +154,9 @@ class Monitor:
                         page_attempt = 0
                         max_page_attempts = 100 # Max retries for a single page with this permutation
                         while not page_scrape_success and page_attempt < max_page_attempts:
+                            if not self.running:
+                                self.log_callback("🛑 Monitoramento interrompido durante raspagem de página.")
+                                break
                             page_attempt += 1
                             try:
                                 self.log_callback(f"🚀 Iniciando scraping da página {page_num} (Tentativa {page_attempt}/{max_page_attempts})")
@@ -172,7 +175,7 @@ class Monitor:
                                     keywords=self.keywords, # Use original keywords for filtering extracted ads
                                     negative_keywords_list=self.negative_keywords_list,
                                     start_page=page_num, # Pass the current page as start_page
-                                    num_pages_to_scrape=max_pages,
+                                    num_pages_to_scrape=max_pages_per_permutation,
                                     save_page=save_page,
                                     page_retry_attempts=1,
                                     page_retry_delay_min=30,
