@@ -1,6 +1,7 @@
 from flask import Flask, Response, request, render_template
 from functools import wraps
 import logging
+from logging.handlers import TimedRotatingFileHandler # Import this
 import os
 from dotenv import load_dotenv
 import json
@@ -12,14 +13,28 @@ from telegram_bot import TelegramBot
 app = Flask(__name__, template_folder='template')
 
 # Configuração de logging
-logging.basicConfig(
-    filename='app.log',
-    filemode='w',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname).1s - %(message)s',
-    datefmt='%H:%M:%S'
+log_file = 'app.log'
+# Ensure the log directory exists if you plan to put logs in a subdirectory
+# os.makedirs(os.path.dirname(log_file), exist_ok=True) 
+
+# Create a TimedRotatingFileHandler
+# 'midnight' rotates the log at midnight. '1' means it keeps 1 day of backups.
+file_handler = TimedRotatingFileHandler(
+    log_file,
+    when='midnight',
+    interval=1,
+    backupCount=7,  # Keep 7 days of logs
+    encoding='utf-8'
 )
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(levelname).1s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S' # Changed datefmt for clarity in daily logs
+))
+
+# Get the root logger and add the handler
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Set the logger level
+logger.addHandler(file_handler)
 
 # Carrega variáveis de ambiente
 load_dotenv()

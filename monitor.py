@@ -177,7 +177,7 @@ class Monitor:
                                     keywords=self.keywords, # Use original keywords for filtering extracted ads
                                     negative_keywords_list=self.negative_keywords_list,
                                     start_page=page_num, # Pass the current page as start_page
-                                    num_pages_to_scrape=max_pages_per_permutation,
+                                    num_pages_to_scrape=1,
                                     save_page=False,
                                     page_retry_attempts=1,
                                     page_retry_delay_min=30,
