@@ -422,8 +422,11 @@ class MarketRoxoScraperCloudflare:
                             break # No more ads for this query, break from page_retry_attempts and also from page_offset loop
                     
                     if not new_ads and page_offset == 0:
-                        raise NoAdsFoundError(f"No relevant ads extracted on page {page_num} (implicit no results) for query: '{search_query}' at {url}")
-
+                        self.log_callback(f"No relevant ads extracted on page {page_num} (implicit no results) for query: '{search_query}' at {url}")
+                        # raise NoAdsFoundError(f"No relevant ads extracted on page {page_num} (implicit no results) for query: '{search_query}' at {url}")
+                        # eu não acho que é um erro isso acima.
+                        
+                    # If we have new ads, add them to the collected list
                     if new_ads:
                         collected_ads.extend(new_ads)
                         self.log_callback(f"✅ Encontrados {len(new_ads)} anúncios na página {page_num}.")
