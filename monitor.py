@@ -15,7 +15,7 @@ class Monitor:
         keywords, negative_keywords_list,
         scraper, telegram_bot,
         chat_id, log_callback, hash_file=None,
-        batch_size=20, page_depth=3,
+        batch_size=15, page_depth=3,
         retry_attempts=100, min_repeat_time=17,
         max_repeat_time=65,
         allow_subset=False, # Novo parâmetro para ligar/desligar a geração de subconjuntos
