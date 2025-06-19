@@ -65,8 +65,14 @@
         </div>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
+        <br>
+        <button id="downloadHashBtn" style="background-color:#1976D2;color:white;" onclick="window.open('/download-hash-file','_blank')">⬇️ Baixar Hash File</button>
+        <br>
+        <button id="archiveLogBtn" style="background-color:#388e3c;color:white;" onclick="fetch('/archive_log', {method: 'GET'}).then(r => r.json()).then(data => alert(data.message)).catch(e => alert('Erro ao arquivar log: ' + e));">🆕 Arquivar Log Atual</button>
+        <br>
+        <button id="downloadLogsBtn" style="background-color:#6d4c41;color:white;" onclick="window.open('/download-logs','_blank')">📦 Baixar Todos Logs</button>
+        <br>
         <span id="autoUpdateStatus" class="status">Carregando logs...</span>
-        
         <div class="log-header">Logs do Sistema (Atualização Automática)</div>
         <pre id="logOutput">Carregando logs...</pre>
     </div>

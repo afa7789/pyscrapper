@@ -9,13 +9,23 @@ from threading import Thread
 from monitor import Monitor
 from scraper_cloudflare import MarketRoxoScraperCloudflare
 from telegram_bot import TelegramBot
+from flask import send_file
+from datetime import datetime
+from flask import jsonify, send_from_directory, abort
+import zipfile
+import io
 
 app = Flask(__name__, template_folder='template')
 
 # --- Configuração de Logging com Rotação Diária ---
-log_file = 'app.log'
+LOGS_DIR = 'logs'  # Dedicated directory for all logs
+os.makedirs(LOGS_DIR, exist_ok=True) # Ensure the directory exists
+
+log_file_base = 'app' # Base name for the current log file
+log_file_path = os.path.join(LOGS_DIR, f'{log_file_base}.log')
+
 file_handler = TimedRotatingFileHandler(
-    log_file,
+    log_file_path, # Path includes the logs directory
     when='midnight',
     interval=1,
     backupCount=7,
@@ -54,7 +64,6 @@ def load_dynamic_config():
     except Exception as e:
         logger.error(f"Erro inesperado ao carregar {CONFIG_FILE_PATH}: {e}")
         return {}
-
 
 def save_dynamic_config(data_to_save):
     """
@@ -149,7 +158,6 @@ def load_monitor_status():
 
 # --- Lógica de Auth (sem mudanças) ---
 
-
 def check_auth(username, password):
     return username == USERNAME and password == PASSWORD
 
@@ -171,6 +179,18 @@ def requires_auth(f):
     return decorated
 
 # --- Rotas Flask ---
+@app.route('/download-hash-file', methods=['GET'])
+@requires_auth
+def download_hash_file():
+    data_dir = os.path.join(os.path.expanduser("~"), ".marketroxo_data")
+    os.makedirs(data_dir, exist_ok=True)
+    hash_file_path = os.path.join(data_dir, "seen_ads.txt")
+
+    if not os.path.exists(hash_file_path):
+        logger.info(f"Hash file not found at: {hash_file_path}")
+        return {"message": "Hash file not found."}, 404
+
+    return send_file(hash_file_path, as_attachment=True)
 
 
 @app.route('/')
@@ -363,14 +383,97 @@ def stop():
 def logs():
     """Retorna o conteúdo do arquivo de log ATUAL (app.log)."""
     try:
-        with open(log_file, 'r', encoding='utf-8') as f:
+        # Use log_file_path which points to the current log file in the LOGS_DIR
+        with open(log_file_path, 'r', encoding='utf-8') as f:
             log_content = f.read()
         return Response(log_content, mimetype='text/plain')
     except FileNotFoundError:
-        return {"message": f"O arquivo de log '{log_file}' não foi encontrado."}, 404
+        return {"message": f"O arquivo de log '{log_file_path}' não foi encontrado."}, 404
     except Exception as e:
         logger.error(f"Erro ao ler logs: {str(e)}")
         return {"message": f"Erro ao ler logs: {str(e)}"}, 500
+
+
+@app.route('/archive_log', methods=['GET'])
+@requires_auth
+def archive_log():
+    """Arquiva o log atual, renomeando com data/hora, e permite que o RotatingFileHandler crie um novo."""
+    try:
+        # The TimedRotatingFileHandler handles archiving/renaming automatically at midnight.
+        # This function is now primarily to trigger an immediate rotation if desired,
+        # or to force a rename *before* the scheduled rotation.
+        # However, directly manipulating the log file that the handler is writing to
+        # can lead to race conditions.
+        # A safer approach for on-demand archiving while using TimedRotatingFileHandler
+        # is to close and reopen the handler, which forces it to roll over.
+        # For simplicity and to match the previous behavior of renaming,
+        # we'll mimic the manual rename but be aware of potential nuances with TRLH.
+
+        # Remove the current handler
+        logger.removeHandler(file_handler)
+        file_handler.close()
+
+        if not os.path.exists(log_file_path):
+            # Re-add the handler even if file not found to avoid breaking logging
+            logger.addHandler(file_handler)
+            return jsonify({'message': 'Arquivo de log atual não encontrado para arquivamento.'}), 404
+
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        archived_name = f"{log_file_base}_{timestamp}.log"
+        archived_path = os.path.join(LOGS_DIR, archived_name) # Ensure archived logs are also in LOGS_DIR
+
+        # Rename the current log file
+        os.rename(log_file_path, archived_path)
+
+        # Create a new handler instance for the newly created log file (or existing if it was rotated by the handler itself)
+        # This effectively forces a new 'app.log' to be created for continued logging.
+        new_file_handler = TimedRotatingFileHandler(
+            log_file_path,
+            when='midnight',
+            interval=1,
+            backupCount=7,
+            encoding='utf-8'
+        )
+        new_file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(levelname).1s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        ))
+        logger.addHandler(new_file_handler)
+        global file_handler # Update the global reference
+        file_handler = new_file_handler
+
+        return jsonify({'message': f'Log atual arquivado como {archived_name}. Nova sessão de log iniciada.'})
+    except Exception as e:
+        logger.error(f"Erro ao arquivar log: {str(e)}")
+        # Attempt to re-add the original handler if something went wrong
+        if file_handler not in logger.handlers:
+            logger.addHandler(file_handler)
+        return jsonify({'message': f'Erro ao arquivar log: {str(e)}'}), 500
+
+
+@app.route('/download-logs', methods=['GET'])
+@requires_auth
+def download_logs():
+    """Compacta e baixa todos os logs na pasta 'logs'."""
+    try:
+        files = []
+        if os.path.exists(LOGS_DIR):
+            for f in os.listdir(LOGS_DIR):
+                if f.endswith('.log'):
+                    files.append(os.path.join(LOGS_DIR, f))
+        
+        if not files:
+            return jsonify({'message': 'Nenhum arquivo de log encontrado para download.'}), 404
+        
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, 'w') as zf:
+            for f in files:
+                zf.write(f, arcname=os.path.basename(f)) # Store only filename in zip
+        mem_zip.seek(0)
+        return send_file(mem_zip, mimetype='application/zip', as_attachment=True, download_name='all_logs.zip')
+    except Exception as e:
+        logger.error(f"Erro ao compactar logs para download: {str(e)}")
+        return jsonify({'message': f'Erro ao baixar logs: {str(e)}'}), 500
 
 
 # Este bloco só é executado quando o script é o principal
