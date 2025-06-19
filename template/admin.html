@@ -9,7 +9,7 @@
         h1 { text-align: center; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"] { width: 100%; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; }
         #startBtn { background-color: #4CAF50; color: white; }
         #stopBtn { background-color: #f44336; color: white; }
@@ -36,6 +36,27 @@
         <div class="form-group">
             <label for="chatInput">Chat ID ou Número de Telefone:</label>
             <input type="text" id="chatInput" value="{{ chat_input }}">
+        </div>
+        <div class="form-group">
+            <label for="pageDepth">Profundidade de páginas:</label>
+            <p>Quantas páginas o scrape deve procurar, além da página 1.</p>
+            <p>Após já ter obtido muitos resultados, e só for atualizar vale reduzir.</p>
+            <input type="number" id="pageDepth" value="{{ page_depth }}" min="1">
+        </div>
+        <div class="form-group">
+            <label for="retryAttempts">Tentativas até sucesso:</label>
+            <p>Quantas vezes ele deve repetir um chamado de página procurando burlar bloqueio.</p>
+            <input type="number" id="retryAttempts" value="{{ retry_attempts }}" min="1">
+        </div>
+        <div class="form-group">
+            <label for="minRepeatTime">Tempo mínimo p/ repetir (segundos):</label>
+            <p>Tempo mínimo entre tentativas de repetição, para evitar bloqueios.</p>
+            <input type="number" id="minRepeatTime" value="{{ min_repeat_time }}" min="1">
+        </div>
+        <div class="form-group">
+            <label for="maxRepeatTime">Tempo máximo p/ repetir (segundos):</label>
+            <p>Tempo máximo entre tentativas de repetição, para evitar bloqueios.</p>
+            <input type="number" id="maxRepeatTime" value="{{ max_repeat_time }}" min="1">
         </div>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
@@ -96,7 +117,11 @@
                 keywords_list: document.getElementById('keywords').value,
                 negative_keywords_list: document.getElementById('negativeKeywords').value,
                 token: document.getElementById('token').value,
-                chat_input: document.getElementById('chatInput').value
+                chat_input: document.getElementById('chatInput').value,
+                page_depth: document.getElementById('pageDepth').value,
+                retry_attempts: document.getElementById('retryAttempts').value,
+                min_repeat_time: document.getElementById('minRepeatTime').value,
+                max_repeat_time: document.getElementById('maxRepeatTime').value
             };
             
             fetch('/start', {
