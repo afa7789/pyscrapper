@@ -296,7 +296,7 @@ def start():
             scraper=scraper,
             telegram_bot=telegram_bot,
             chat_id=chat_input,
-            log_callback=logger.info
+            log_callback=logger.info,
             # Se quiser passar os novos parâmetros ao Monitor, adicione aqui
             page_depth=page_depth,
             retry_attempts=retry_attempts,

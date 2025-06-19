@@ -123,17 +123,16 @@ gunicorn -w 4 -b 0.0.0.0:5000 server:app
     docker run -p 5000:5000 --env-file .env my-python-app
     docker run -p 5000:5000 -v $(pwd):/app -w /app my-python-app python server.py --reload
 ```
+## Pre-requisites
 
-## pre requisitos:
-
-O que precisa p/ rodar:
-- VPS
-- domínio
-- Royal proxy, ou outro proxy residencial
-- configurar dominio e DNS p/ apontar p/ VPS
-- instalar python
-- instalar nginx
-- configurar certbot
-- configurar nginx
-- instalar dependências do python
-- preencher .env
+Ensure that you have the following:
+- A VPS (Virtual Private Server)
+- A registered domain
+- A residential proxy service (e.g., Royal Proxy or an alternative)
+- DNS configuration to point the domain to your VPS
+- Python installed
+- NGINX installed
+- Certbot configured for SSL certificate management
+- NGINX properly configured
+- Python dependencies installed
+- A correctly filled .env file
