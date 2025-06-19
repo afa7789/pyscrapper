@@ -43,14 +43,6 @@ class Monitor:
         self.batch_size = batch_size
         self.seen_ads = self._load_seen_ads()
 
-        # Dynamic interval settings for retry between cycles
-        self.base_interval_minutes = 20
-        self.max_interval_minutes = 50
-        self.interval_multiplier = 5
-        self.current_interval_minutes = self.base_interval_minutes
-        self.incomplete_page_count = 0
-        self.incomplete_page_threshold = 3
-
         self.page_depth = page_depth
         self.retry_attempts = retry_attempts
         self.min_repeat_time = min_repeat_time
@@ -88,25 +80,7 @@ class Monitor:
                 f.write(f"{ad_hash}\n")
         except Exception as e:
             self.log_callback(f"❌ Erro ao salvar hash de anúncio: {str(e)}")
-
-    def _adjust_interval(self, ads_found):
-        """Adjusts the interval based on scraping results."""
-        if not ads_found:
-            self.incomplete_page_count += 1
-            if self.incomplete_page_count >= self.incomplete_page_threshold:
-                new_interval = min(self.current_interval_minutes *
-                                   self.interval_multiplier, self.max_interval_minutes)
-                if new_interval != self.current_interval_minutes:
-                    self.current_interval_minutes = new_interval
-                    self.log_callback(
-                        f"⏰ Intervalo aumentado para {self.current_interval_minutes} minutos devido a páginas incompletas")
-                self.incomplete_page_count = 0
-        else:
-            self.incomplete_page_count = 0
-            if self.current_interval_minutes != self.base_interval_minutes:
-                self.current_interval_minutes = self.base_interval_minutes
-                self.log_callback(
-                    f"⏰ Intervalo restaurado para {self.base_interval_minutes} minuto após sucesso")
+            
 
     def _generate_keyword_subsets(self):
         """
@@ -313,7 +287,6 @@ class Monitor:
             except Exception as e:
                 self.log_callback(
                     f"❌ Erro geral durante verificação de ciclo: {str(e)}")
-                self._adjust_interval(False)
 
             cycle_end_time = time.time()
             cycle_duration = cycle_end_time - cycle_start_time
