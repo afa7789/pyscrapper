@@ -316,7 +316,10 @@ class Monitor:
         for i in range(0, len(ads), self.batch_size):
             batch = ads[i:i + self.batch_size]
             selected_emoji = get_random_emoji()
-            message_header = f"{selected_emoji} Novos anúncios encontrados (parte {len(messages) + 1} de {(len(ads) + self.batch_size - 1) // self.batch_size}):\n\n"
+            if self.batch_size == 1:
+                message_header = f"{selected_emoji} Novo anúncio encontrado:\n\n"
+            else:
+                message_header = f"{selected_emoji} Novos anúncios encontrados (parte {len(messages) + 1} de {(len(ads) + self.batch_size - 1) // self.batch_size}):\n\n"
             message_content = "\n\n".join(batch)
             messages.append(message_header + message_content)
         return messages
