@@ -38,6 +38,11 @@
             <input type="text" id="chatInput" value="{{ chat_input }}">
         </div>
         <div class="form-group">
+            <label for="interval_monitor">Tempo entre intervalos de Scrape:</label>
+            <p>Tempo grande de intervalor entre o ato de vasculhar multiplas páginas.</p>
+            <input type="number" id="interval_monitor" value="{{ interval_monitor }}" min="1">
+        </div>
+        <div class="form-group">
             <label for="pageDepth">Profundidade de páginas:</label>
             <p>Quantas páginas o scrape deve procurar, além da página 1.</p>
             <p>Após já ter obtido muitos resultados, e só for atualizar vale reduzir.</p>
@@ -127,6 +132,7 @@
                 negative_keywords_list: document.getElementById('negativeKeywords').value,
                 token: document.getElementById('token').value,
                 chat_input: document.getElementById('chatInput').value,
+                interval_monitor: document.getElementById('interval_monitor').value,
                 page_depth: document.getElementById('pageDepth').value,
                 retry_attempts: document.getElementById('retryAttempts').value,
                 min_repeat_time: document.getElementById('minRepeatTime').value,

@@ -15,6 +15,7 @@ class Monitor:
         keywords, negative_keywords_list,
         scraper, telegram_bot,
         chat_id, log_callback, hash_file=None,
+        monitoring_interval=30,  # Intervalo de monitoramento em minutos
         batch_size=15, page_depth=3,
         retry_attempts=100, min_repeat_time=17,
         max_repeat_time=65,
@@ -29,6 +30,7 @@ class Monitor:
         self.log_callback = log_callback
         self.running = False
         self.stop_event = threading.Event()
+        self.monitoring_interval = monitoring_interval  # Intervalo de monitoramento em minutos
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
@@ -293,7 +295,7 @@ class Monitor:
             self.log_callback(
                 f"⏱️ Ciclo de verificação concluído em {cycle_duration:.1f} segundos.")
 
-            wait_time_minutes = 30
+            wait_time_minutes = self.monitoring_interval
             self.log_callback(
                 f"⏳ Aguardando próximo ciclo ({wait_time_minutes} minutos)...")
             seconds_to_wait = wait_time_minutes * 60
