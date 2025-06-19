@@ -31,7 +31,7 @@
         </div>
         <div class="form-group">
             <label for="token">Token do Telegram:</label>
-            <input type="text" id="token" value="{{ token }}">
+            <input type="password" id="token" value="{{ token }}" autocomplete="new-password">
         </div>
         <div class="form-group">
             <label for="chatInput">ID do Chat ou Número de Telefone:</label>
@@ -74,6 +74,8 @@
             <p> Cuidado ao usar: com proxy, isso faz mais chamadas e gasta mais créditos. Bom para tentar achar resultados diferentes.</p>
             <input type="checkbox" id="allowKeywordSubsets" {{ 'checked' if allow_keyword_subsets else '' }}>
         </div>
+        <h2>Controle do monitor de procura </h2>
+        <p>Ao trocar valores é bom parar para interromper qualquer busca, e iniciar após. Sem iniciar os valores novos não são salvos no servidor. </p>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
         <br>
