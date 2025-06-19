@@ -9,11 +9,10 @@ from threading import Thread
 from monitor import Monitor
 from scraper_cloudflare import MarketRoxoScraperCloudflare
 from telegram_bot import TelegramBot
-import glob
 
 app = Flask(__name__, template_folder='template')
 
-# Configuração de logging
+# --- Configuração de Logging com Rotação Diária ---
 log_file = 'app.log'
 file_handler = TimedRotatingFileHandler(
     log_file,
@@ -31,14 +30,17 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(file_handler)
 
-# Carrega variáveis de ambiente (precisa ser feito para que os.getenv funcione)
+# Carrega variáveis de ambiente
 load_dotenv()
 
 # --- GERENCIAMENTO DO config.json ---
 CONFIG_FILE_PATH = 'config.json'
 
-def load_config_from_file():
-    """Tenta carregar o config.json. Retorna dicionário vazio se não existir ou for inválido."""
+def load_dynamic_config():
+    """
+    Tenta carregar as configurações dinâmicas do config.json.
+    Retorna dicionário vazio se o arquivo não existir ou for inválido.
+    """
     try:
         if os.path.exists(CONFIG_FILE_PATH):
             with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
@@ -51,36 +53,44 @@ def load_config_from_file():
         logger.error(f"Erro inesperado ao carregar {CONFIG_FILE_PATH}: {e}")
         return {}
 
-def save_config_to_file(data_to_save):
-    """Salva os dados no config.json."""
+def save_dynamic_config(data_to_save):
+    """
+    Salva as configurações dinâmicas no config.json.
+    Sobrescreve o conteúdo existente com os novos dados.
+    """
     try:
         with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
             json.dump(data_to_save, f, indent=2)
-        logger.info(f"Configurações salvas em '{CONFIG_FILE_PATH}'.")
+        logger.info(f"Configurações dinâmicas salvas em '{CONFIG_FILE_PATH}'.")
     except IOError as e:
-        logger.error(f"Erro ao salvar configurações em '{CONFIG_FILE_PATH}': {e}")
+        logger.error(f"Erro ao salvar configurações dinâmicas em '{CONFIG_FILE_PATH}': {e}")
     except Exception as e:
         logger.error(f"Erro inesperado ao salvar config.json: {e}")
 
-# --- Carrega configurações para variáveis globais (Prioridade: 1. config.json, 2. .env, 3. Valor padrão) ---
+# --- Variáveis Globais (Lidas na Inicialização) ---
+# Estas variáveis têm a seguinte prioridade:
+# 1. config.json (se existir e tiver a chave)
+# 2. .env (via os.getenv)
+# 3. Valor padrão hardcoded no código
 
-# Carrega o config.json uma vez na inicialização para servir como primeira fonte
-app_config_from_file = load_config_from_file()
+# Carrega configurações dinâmicas uma vez na inicialização para variáveis globais
+initial_dynamic_config = load_dynamic_config()
 
-# As variáveis agora priorizam o config.json, depois o .env, depois o padrão hardcoded.
-TELEGRAM_TOKEN = app_config_from_file.get("token", os.getenv("TELEGRAM_TOKEN", ""))
-CHAT_INPUT = app_config_from_file.get("chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
-DEFAULT_KEYWORDS = app_config_from_file.get("keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
-NEGATIVE_KEYWORDS = app_config_from_file.get("negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
+TELEGRAM_TOKEN = initial_dynamic_config.get("token", os.getenv("TELEGRAM_TOKEN", ""))
+CHAT_INPUT = initial_dynamic_config.get("chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
+DEFAULT_KEYWORDS = initial_dynamic_config.get("keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
+NEGATIVE_KEYWORDS = initial_dynamic_config.get("negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
 
 BASE_URL = os.getenv("MAIN_URL_SCRAPE_ROXO", "")
 if not BASE_URL:
     logger.error("Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
     raise ValueError("Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
 
+# Credenciais para Basic Auth (sempre do .env ou padrão)
 USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 PASSWORD = os.getenv("ADMIN_PASSWORD", "password123")
 
+# Variáveis da Empresa (sempre do .env ou padrão)
 COMPANY_TITLE = os.getenv("COMPANY_TITLE", "")
 COMPANY_SLOGAN = os.getenv("COMPANY_SLOGAN", "")
 COMPANY_DESCRIPTION = os.getenv("COMPANY_DESCRIPTION", "")
@@ -106,35 +116,35 @@ monitor = None
 monitor_thread = None
 
 def save_monitor_status(status):
+    """Salva o status de execução do monitor em um arquivo."""
     try:
-        with open('monitor_status.json', 'w') as f:
+        with open('monitor_status.json', 'w', encoding='utf-8') as f:
             json.dump({'is_running': status}, f)
     except Exception as e:
         logger.error(f"Erro ao salvar estado do monitor: {str(e)}")
 
 def load_monitor_status():
+    """Carrega o status de execução do monitor de um arquivo."""
     try:
         if os.path.exists('monitor_status.json'):
-            with open('monitor_status.json', 'r') as f:
+            with open('monitor_status.json', 'r', encoding='utf-8') as f:
                 return json.load(f).get('is_running', False)
         return False
     except Exception as e:
         logger.error(f"Erro ao carregar estado do monitor: {str(e)}")
         return False
 
+# --- Lógica de Auth (sem mudanças) ---
 def check_auth(username, password):
-    """Verifica as credenciais do Basic Auth."""
     return username == USERNAME and password == PASSWORD
 
 def authenticate():
-    """Resposta para autenticação não autorizada."""
     return Response(
         'Autenticação necessária.', 401,
         {'WWW-Authenticate': 'Basic realm="Login Required"'}
     )
 
 def requires_auth(f):
-    """Decorador para rotas protegidas por Basic Auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
@@ -143,9 +153,9 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+# --- Rotas Flask ---
 @app.route('/')
 def home():
-    """Rota pública que retorna a página principal."""
     return render_template(
         'index.html',
         company_title=COMPANY_TITLE,
@@ -162,15 +172,14 @@ def home():
 @app.route('/admin')
 @requires_auth
 def admin():
-    """Rota protegida que retorna a página de administração."""
-    # Recarrega o config.json AQUI para garantir que está sempre lendo o estado mais recente
-    current_app_config_from_file = load_config_from_file()
+    # Sempre recarrega as configurações dinâmicas do config.json para ter os valores mais recentes
+    current_dynamic_config = load_dynamic_config()
     
-    # As variáveis para o template seguem a precedência: config.json > .env > padrão
-    keywords_list_val = current_app_config_from_file.get("keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
-    negative_keywords_list_val = current_app_config_from_file.get("negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
-    token_val = current_app_config_from_file.get("token", os.getenv("TELEGRAM_TOKEN", ""))
-    chat_input_val = current_app_config_from_file.get("chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
+    # As variáveis para o template seguem a prioridade: config.json > .env > padrão
+    keywords_list_val = current_dynamic_config.get("keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
+    negative_keywords_list_val = current_dynamic_config.get("negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
+    token_val = current_dynamic_config.get("token", os.getenv("TELEGRAM_TOKEN", ""))
+    chat_input_val = current_dynamic_config.get("chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
 
     return render_template(
         'admin.html',
@@ -187,33 +196,42 @@ def admin():
 def start():
     global monitor, monitor_thread
     try:
-        if load_monitor_status():
-            logger.info("Monitoramento já está ativo")
-            return {"message": "Monitoramento já está ativo!"}, 400
+        # Verifica se um monitor JÁ ESTÁ ATIVO NESTE PROCESSO
+        # E também verifica o status persistido para evitar iniciar duas vezes
+        if monitor and monitor_thread and monitor_thread.is_alive():
+             logger.info("Monitoramento já está ativo (verificado por variável global)")
+             return {"message": "Monitoramento já está ativo!"}, 400
+        
+        if load_monitor_status(): # Verifica o status persistido
+            logger.info("Monitoramento já está ativo (verificado por monitor_status.json)")
+            # Tenta parar o monitor persistido se ele não estiver rodando neste processo.
+            # Isso pode acontecer se o app foi reiniciado e o status_json ficou 'true'.
+            # Mas idealmente, para um server.py único, 'monitor' e 'monitor_thread' devem ser None
+            # se não houver um monitor ativo neste processo.
+            # Se load_monitor_status() é true mas monitor é None, é um estado "sujo".
+            # Vamos forçar a parada para limpar.
+            logger.warning("monitor_status.json indica ativo, mas variáveis globais são None. Forçando reset.")
+            save_monitor_status(False) # Reseta o status para permitir um novo início.
+            # A requisição continuará para iniciar o monitor agora.
 
         data = request.get_json()
         
-        # Pega os valores da requisição JSON. Se não vierem, usa a configuração atual (.env ou config.json)
-        # O objetivo é que os valores da requisição sejam os que serão salvos.
         keywords_list_str = data.get('keywords_list', DEFAULT_KEYWORDS)
         negative_keywords_list_str = data.get('negative_keywords_list', NEGATIVE_KEYWORDS)
         token = data.get('token', TELEGRAM_TOKEN)
         chat_input = data.get('chat_input', CHAT_INPUT)
 
-        # Salva as configurações dinâmicas que foram definidas ou enviadas
-        # para o config.json. Isso sobrescreverá as entradas existentes.
         data_to_save = {
             "keywords": keywords_list_str,
             "negative_keywords_list": negative_keywords_list_str,
             "token": token,
             "chat_input": chat_input
         }
-        save_config_to_file(data_to_save)
+        save_dynamic_config(data_to_save)
 
-        # Prepara os valores para o Monitor
         keywords_list = [kw.strip() for kw in keywords_list_str.split(",") if kw.strip()]
         negative_keywords_list = [
-            kw.strip() for kw in negative_list_str.split(",") if kw.strip()] # BUG: negative_list_str is not defined. It should be negative_keywords_list_str
+            kw.strip() for kw in negative_keywords_list_str.split(",") if kw.strip()]
         
         telegram_bot = TelegramBot(log_callback=logger.info, token=token)
         scraper = MarketRoxoScraperCloudflare(
@@ -255,23 +273,22 @@ def stop():
     logger.info(f"Estado do monitor antes de parar: {monitor}")
     logger.info(f"Estado da thread antes de parar: {monitor_thread}")
     try:
-        if not load_monitor_status():
-            logger.info("Nenhum monitoramento ativo para parar")
-            return {"message": "Nenhum monitoramento ativo para parar"}, 400
-
-        if monitor:
+        # Verifica se o monitor está ativo NESTE PROCESSO
+        if monitor and monitor_thread and monitor_thread.is_alive():
             monitor.stop()
-            if monitor_thread and monitor_thread.is_alive():
-                monitor_thread.join(timeout=10)
+            monitor_thread.join(timeout=10) # Aguarda a thread terminar
             monitor = None
             monitor_thread = None
-            save_monitor_status(False)
+            save_monitor_status(False) # Limpa o status persistido
             logger.info("Monitoramento parado com sucesso")
             return {"message": "Monitoramento parado com sucesso!"}, 200
+        elif load_monitor_status(): # Se não está ativo aqui, mas o arquivo diz que está
+            logger.warning("Monitoramento não ativo neste processo, mas monitor_status.json indica ativo. Resetando.")
+            save_monitor_status(False) # Apenas limpa o arquivo
+            return {"message": "Monitoramento já estava parado (status resetado)."}, 200
         else:
-            logger.info("Monitoramento não encontrado, mas estado indica que estava ativo")
-            save_monitor_status(False)
-            return {"message": "Monitoramento parado com sucesso!"}, 200
+            logger.info("Nenhum monitoramento ativo para parar")
+            return {"message": "Nenhum monitoramento ativo para parar"}, 400
     except Exception as e:
         logger.error(f"Erro ao parar monitoramento: {str(e)}")
         return {"message": f"Erro ao parar monitoramento: {str(e)}"}, 500
@@ -290,5 +307,10 @@ def logs():
         logger.error(f"Erro ao ler logs: {str(e)}")
         return {"message": f"Erro ao ler logs: {str(e)}"}, 500
 
+# Este bloco só é executado quando o script é o principal
 if __name__ == '__main__':
+    # Ao iniciar o aplicativo, garanta que o status persistido do monitor seja FALSO.
+    # Isso evita problemas se o aplicativo foi encerrado de forma inesperada.
+    # Apenas se o monitor *realmente* está rodando, o status será True.
+    save_monitor_status(False) 
     app.run(debug=False, host='0.0.0.0', port=5000, threaded=False, processes=1)
