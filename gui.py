@@ -35,7 +35,8 @@ class MarketRoxoGUI:
             "TELEGRAM_CHAT_ID_OR_PHONE", "").strip()
         self.default_negative_keywords = os.getenv(
             "NEGATIVE_KEYWORDS_LIST", "")
-        self.default_proxies = os.getenv("HTTP_PROXY", "") # Assuming HTTP_PROXY for simplicity, can be expanded
+        # Assuming HTTP_PROXY for simplicity, can be expanded
+        self.default_proxies = os.getenv("HTTP_PROXY", "")
 
         # Create all widgets immediately
         self.create_widgets()

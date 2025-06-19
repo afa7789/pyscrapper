@@ -3,11 +3,13 @@ import time
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+
 class MarketRoxoScraper:
     def __init__(self, log_callback, base_url, proxies=""):
         """Initializes the scraper with the base URL and headers."""
         if not callable(log_callback):
-            raise ValueError(f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
+            raise ValueError(
+                f"log_callback must be callable, got {type(log_callback)}: {log_callback}")
         self.base_url = base_url
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.103 Safari/537.36"
@@ -15,11 +17,13 @@ class MarketRoxoScraper:
         self.delay = 25
         self.log_callback = log_callback
         self.proxies = proxies
-        self.log_callback(f"🔍 Debug: MarketRoxoScraper initialized with log_callback={log_callback}")
+        self.log_callback(
+            f"🔍 Debug: MarketRoxoScraper initialized with log_callback={log_callback}")
 
     def _build_query(self, keywords):
         """Builds a clean query string from keywords, splitting on spaces and removing duplicates."""
-        unique_keywords = {word.lower() for keyword in keywords for word in keyword.split()}
+        unique_keywords = {word.lower()
+                           for keyword in keywords for word in keyword.split()}
         query = " ".join(unique_keywords)
         return query
 
@@ -33,21 +37,26 @@ class MarketRoxoScraper:
             self.log_callback(f"Scraping página {page}... {url}")
             try:
                 if self.proxies and self.proxies != "":
-                    response = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=20)
+                    response = requests.get(
+                        url, headers=self.headers, proxies=self.proxies, timeout=20)
                 else:
-                    response = requests.get(url, headers=self.headers, timeout=20)
+                    response = requests.get(
+                        url, headers=self.headers, timeout=20)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
                 if save_page:
                     with open(f"debug_page_{page}.html", "w", encoding="utf-8") as f:
                         f.write(str(soup))
-                        self.log_callback(f"Página {page} processada com sucesso.")
+                        self.log_callback(
+                            f"Página {page} processada com sucesso.")
                 if "Nenhum anúncio foi encontrado" in soup.text:
                     self.log_callback("Fim das páginas disponíveis.")
                     break
-                new_ads = self._extract_ads(soup, keywords, negative_keywords_list)
+                new_ads = self._extract_ads(
+                    soup, keywords, negative_keywords_list)
                 if new_ads:
-                    self.log_callback(f"Encontrados {len(new_ads)} anúncios na página {page}.")
+                    self.log_callback(
+                        f"Encontrados {len(new_ads)} anúncios na página {page}.")
                     ads.extend(new_ads)
                 page += 1
                 time.sleep(self.delay)
@@ -71,8 +80,10 @@ class MarketRoxoScraper:
             ad_title = link.get("title", "").lower()
             has_ad_url = bool(ad_url)
             has_ad_title = bool(ad_title)
-            match_positive = any(keyword.lower() in ad_title for keyword in keywords)
-            match_negative = any(negative.lower() in ad_title for negative in negative_keywords_list or [])
+            match_positive = any(
+                keyword.lower() in ad_title for keyword in keywords)
+            match_negative = any(
+                negative.lower() in ad_title for negative in negative_keywords_list or [])
             if has_ad_url and has_ad_title and match_positive and not match_negative:
                 full_url = urljoin(self.base_url, ad_url)
                 ads.append({"title": ad_title, "url": full_url})
