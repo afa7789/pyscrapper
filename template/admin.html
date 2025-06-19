@@ -4,18 +4,186 @@
     <meta charset="UTF-8">
     <title>Painel de Administração - OLN Logística</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-        .container { max-width: 800px; margin: auto; padding: 20px; background: white; border-radius: 8px; }
-        h1 { text-align: center; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="number"] { width: 100%; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; }
+        /* Regras gerais para todos os dispositivos */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6; /* Melhora a legibilidade do texto */
+        }
+        /* Adicionar box-sizing globalmente é uma boa prática para layouts responsivos */
+        * {
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); /* Adiciona uma sombra suave */
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 25px; /* Adiciona mais espaço abaixo do título principal */
+            font-size: 2em; /* Tamanho do título principal */
+        }
+        h2 { /* Adicionar estilo para h2, se aplicável */
+            font-size: 1.6em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .form-group {
+            margin-bottom: 20px; /* Aumenta o espaçamento entre os grupos de formulário */
+        }
+        label {
+            display: block;
+            margin-bottom: 8px; /* Aumenta o espaçamento abaixo do label */
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="text"],
+        input[type="number"],
+        input[type="password"], /* Incluir input[type="password"] aqui */
+        textarea { /* Adicionar textarea, caso venha a ter */
+            width: 100%; /* Faz com que o input ocupe 100% da largura do contêiner pai */
+            padding: 10px; /* Aumenta o padding para melhor toque e visual */
+            font-size: 1.1em; /* Tamanho da fonte dos inputs, relativo ao body font-size */
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            transition: border-color 0.3s; /* Adiciona transição suave para foco */
+        }
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="password"]:focus,
+        textarea:focus {
+            border-color: #007bff; /* Muda a cor da borda ao focar */
+            outline: none; /* Remove o outline padrão */
+        }
+
+        /* Estilo para parágrafos dentro de form-group (instruções) */
+        .form-group p {
+            font-size: 0.9em; /* slightly smaller than base font, but still readable */
+            color: #666;
+            margin-top: 5px;
+            margin-bottom: 10px; /* Space before input */
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px 5px 5px 0; /* Ajusta a margem dos botões */
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s ease;
+        }
         #startBtn { background-color: #4CAF50; color: white; }
+        #startBtn:hover { background-color: #45a049; }
         #stopBtn { background-color: #f44336; color: white; }
-        .status { display: inline-block; margin-left: 10px; font-size: 14px; color: #2196F3; font-weight: bold; }
-        #logOutput { margin-top: 20px; padding: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-        .log-header { margin-bottom: 10px; font-weight: bold; color: #333; }
+        #stopBtn:hover { background-color: #da190b; }
+        #downloadHashBtn { background-color:#1976D2;color:white; }
+        #downloadHashBtn:hover { background-color: #115da3; }
+        #archiveLogBtn { background-color:#388e3c;color:white; }
+        #archiveLogBtn:hover { background-color: #2e7031; }
+        #downloadLogsBtn { background-color:#6d4c41;color:white; }
+        #downloadLogsBtn:hover { background-color: #5a3e36; }
+
+        .status {
+            display: block; /* Mude para block para ocupar a própria linha */
+            margin-top: 15px; /* Espaço acima do status */
+            margin-bottom: 10px;
+            font-size: 1.05em;
+            color: #2196F3;
+            font-weight: bold;
+            text-align: center; /* Centraliza o texto de status */
+        }
+        #logOutput {
+            margin-top: 20px;
+            padding: 15px; /* Aumenta o padding do log output */
+            background: #fdfdfd; /* Cor de fundo mais clara para o log */
+            border: 1px solid #ddd; /* Borda mais suave */
+            border-radius: 4px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', Courier, monospace; /* Fonte monoespaçada para logs */
+            font-size: 0.9em; /* Tamanho da fonte do log */
+            color: #333;
+        }
+        .log-header {
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #333;
+            text-align: center; /* Centraliza o cabeçalho do log */
+            font-size: 1.2em;
+        }
+
+        /* MEDIA QUERIES PARA CELULARES */
+        @media (max-width: 600px) {
+            body {
+                margin: 10px; /* Reduz a margem geral do corpo */
+                font-size: 15px; /* Base da fonte um pouco menor para celular */
+            }
+
+            .container {
+                padding: 15px; /* Reduz o padding do contêiner */
+            }
+
+            h1 {
+                font-size: 1.8em; /* Reduz o tamanho do título principal */
+                margin-bottom: 20px;
+            }
+            h2 {
+                font-size: 1.4em;
+                margin-top: 20px;
+                margin-bottom: 10px;
+            }
+
+            /* Aumenta o tamanho dos inputs e seu padding para facilitar o toque no celular */
+            input[type="text"],
+            input[type="number"],
+            input[type="password"],
+            textarea {
+                padding: 14px; /* Aumenta o padding consideravelmente */
+                font-size: 1.15em; /* Garante que a fonte do input seja bem legível */
+                -webkit-appearance: none; /* Remove estilos padrão de input em iOS */
+                -moz-appearance: none;    /* Remove estilos padrão de input em Firefox Mobile */
+                appearance: none;         /* Estilo padrão */
+                border-radius: 6px; /* Levemente mais arredondado para celular */
+            }
+
+            .form-group p {
+                font-size: 0.95em; /* Garante que os textos de instrução sejam legíveis */
+                margin-top: 3px;
+                margin-bottom: 8px;
+            }
+
+            label {
+                font-size: 1em; /* Garante que os labels sejam bem visíveis */
+                margin-bottom: 5px;
+            }
+
+            button {
+                width: 100%; /* Faz com que os botões ocupem a largura total */
+                margin: 8px 0; /* Aumenta a margem vertical entre botões */
+                padding: 15px; /* Aumenta o padding dos botões para facilitar o toque */
+                font-size: 1.05em; /* Ajusta o tamanho da fonte dos botões */
+            }
+
+            .status, .log-header {
+                font-size: 1em; /* Ajusta o tamanho do status e cabeçalho do log */
+            }
+
+            #logOutput {
+                max-height: 300px; /* Reduz a altura máxima do log para telas menores */
+                padding: 10px;
+                font-size: 0.85em; /* Reduz a fonte do log para caber mais */
+            }
+        }
     </style>
 </head>
 <body>
