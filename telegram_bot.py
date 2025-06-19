@@ -1,20 +1,19 @@
 import requests
 
-
 class TelegramBot:
     def __init__(self, log_callback, token):
         self.token = token
         self.log_callback = log_callback
+        self.MAX_MESSAGE_LENGTH = 4096 # Telegram's character limit
 
     def send_message(self, identifier, text):
-        """Sends message to a chat ID, phone number, or username (if valid)."""
+        """Sends message to a chat ID, phone number, or username (if valid).
+           Splits long messages into multiple messages."""
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
 
-        # Check if identifier is a chat ID (numeric, can be a string or int)
         if isinstance(identifier, (int, str)) and str(identifier).isdigit():
             chat_id = identifier
         else:
-            # Fetches updates to find the chat_id associated with the phone number or username
             updates = requests.get(
                 f"https://api.telegram.org/bot{self.token}/getUpdates").json()
             chat_id = None
@@ -22,16 +21,13 @@ class TelegramBot:
             for update in updates.get("result", []):
                 if "message" in update and "chat" in update["message"]:
                     chat = update["message"]["chat"]
-                    # Check if identifier is a phone number (starts with "+")
                     if identifier.startswith("+") and "contact" in update["message"]:
                         if update["message"]["contact"]["phone_number"] == identifier:
                             chat_id = chat["id"]
                             break
-                    # Check if identifier is a username (starts with "@")
                     elif identifier.startswith("@") and chat.get("username") == identifier:
                         chat_id = chat["id"]
                         break
-                    # Check if identifier is a username without "@" prefix
                     elif chat.get("username") == f"@{identifier}" or chat.get("username") == identifier:
                         chat_id = chat["id"]
                         break
@@ -41,21 +37,29 @@ class TelegramBot:
                     "Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
                 raise ValueError(
                     "Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
+        
+        # Split the message if it's too long
+        message_chunks = [text[i:i + self.MAX_MESSAGE_LENGTH] 
+                          for i in range(0, len(text), self.MAX_MESSAGE_LENGTH)]
 
-        # Sends the message
-        params = {"chat_id": chat_id, "text": text}
-        response = requests.post(url, params=params)
+        for chunk in message_chunks:
+            params = {"chat_id": chat_id, "text": chunk}
+            response = requests.post(url, params=params)
 
-        if response.status_code != 200:
-            self.log_callback(f"Erro ao enviar mensagem: {response.text}")
-            raise Exception(f"Erro ao enviar mensagem: {response.text}")
+            if response.status_code != 200:
+                self.log_callback(f"Erro ao enviar mensagem: {response.text}")
+                # You might want to handle this error more gracefully,
+                # e.g., by retrying or logging and continuing to the next chunk.
+                raise Exception(f"Erro ao enviar mensagem: {response.text}")
+            else:
+                self.log_callback(f"Mensagem enviada com sucesso: {chunk[:50]}...") # Log a snippet
+
 
     def list_interacted_users(self):
         """Lists all users who have interacted with the bot."""
         url = f"https://api.telegram.org/bot{self.token}/getUpdates"
         try:
             response = requests.get(url)
-            # print(response)
             if response.status_code != 200:
                 self.log_callback(
                     f"Erro ao obter atualizações: {response.text}")
@@ -75,7 +79,6 @@ class TelegramBot:
                         "phone_number": "N/A"
                     }
 
-                    # Check if contact information is available
                     if "contact" in update["message"]:
                         user_info["phone_number"] = update["message"]["contact"].get(
                             "phone_number", "N/A")

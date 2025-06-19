@@ -18,3 +18,4 @@ TODO.md
 monitor_status.json
 app.log.*
 config.json
+logs

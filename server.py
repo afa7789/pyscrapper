@@ -46,7 +46,6 @@ load_dotenv()
 # --- GERENCIAMENTO DO config.json ---
 CONFIG_FILE_PATH = 'config.json'
 
-
 def load_dynamic_config():
     """
     Tenta carregar as configurações dinâmicas do config.json.
@@ -398,6 +397,7 @@ def logs():
 @requires_auth
 def archive_log():
     """Arquiva o log atual, renomeando com data/hora, e permite que o RotatingFileHandler crie um novo."""
+    global file_handler  # <--- Moved to the top of the function
     try:
         # The TimedRotatingFileHandler handles archiving/renaming automatically at midnight.
         # This function is now primarily to trigger an immediate rotation if desired,
@@ -439,8 +439,7 @@ def archive_log():
             datefmt='%Y-%m-%d %H:%M:%S'
         ))
         logger.addHandler(new_file_handler)
-        global file_handler # Update the global reference
-        file_handler = new_file_handler
+        file_handler = new_file_handler # Update the global reference
 
         return jsonify({'message': f'Log atual arquivado como {archived_name}. Nova sessão de log iniciada.'})
     except Exception as e:
@@ -449,7 +448,6 @@ def archive_log():
         if file_handler not in logger.handlers:
             logger.addHandler(file_handler)
         return jsonify({'message': f'Erro ao arquivar log: {str(e)}'}), 500
-
 
 @app.route('/download-logs', methods=['GET'])
 @requires_auth
