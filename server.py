@@ -46,6 +46,7 @@ load_dotenv()
 # --- GERENCIAMENTO DO config.json ---
 CONFIG_FILE_PATH = 'config.json'
 
+
 def load_dynamic_config():
     """
     Tenta carregar as configurações dinâmicas do config.json.
@@ -406,57 +407,17 @@ def logs():
 @requires_auth
 def archive_log():
     """Arquiva o log atual, renomeando com data/hora, e permite que o RotatingFileHandler crie um novo."""
-    global file_handler  # <--- Moved to the top of the function
     try:
-        # The TimedRotatingFileHandler handles archiving/renaming automatically at midnight.
-        # This function is now primarily to trigger an immediate rotation if desired,
-        # or to force a rename *before* the scheduled rotation.
-        # However, directly manipulating the log file that the handler is writing to
-        # can lead to race conditions.
-        # A safer approach for on-demand archiving while using TimedRotatingFileHandler
-        # is to close and reopen the handler, which forces it to roll over.
-        # For simplicity and to match the previous behavior of renaming,
-        # we'll mimic the manual rename but be aware of potential nuances with TRLH.
-
-        # Remove the current handler
-        logger.removeHandler(file_handler)
-        file_handler.close()
-
-        if not os.path.exists(log_file_path):
-            # Re-add the handler even if file not found to avoid breaking logging
-            logger.addHandler(file_handler)
-            return jsonify({'message': 'Arquivo de log atual não encontrado para arquivamento.'}), 404
-
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        archived_name = f"{log_file_base}_{timestamp}.log"
-        archived_path = os.path.join(LOGS_DIR, archived_name) # Ensure archived logs are also in LOGS_DIR
-
-        # Rename the current log file
-        os.rename(log_file_path, archived_path)
-
-        # Create a new handler instance for the newly created log file (or existing if it was rotated by the handler itself)
-        # This effectively forces a new 'app.log' to be created for continued logging.
-        new_file_handler = TimedRotatingFileHandler(
-            log_file_path,
-            when='midnight',
-            interval=1,
-            backupCount=7,
-            encoding='utf-8'
-        )
-        new_file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s - %(levelname).1s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        ))
-        logger.addHandler(new_file_handler)
-        file_handler = new_file_handler # Update the global reference
-
-        return jsonify({'message': f'Log atual arquivado como {archived_name}. Nova sessão de log iniciada.'})
+        # Call doRollover() to force the TimedRotatingFileHandler to rotate the log.
+        # This will rename the current log_file_path (e.g., app.log) to app.log.YYYY-MM-DD
+        # and create a new empty app.log for further logging.
+        file_handler.doRollover()
+        logger.info("Log rotated successfully by doRollover().")
+        return jsonify({'message': 'Log atual arquivado. Nova sessão de log iniciada.'})
     except Exception as e:
         logger.error(f"Erro ao arquivar log: {str(e)}")
-        # Attempt to re-add the original handler if something went wrong
-        if file_handler not in logger.handlers:
-            logger.addHandler(file_handler)
         return jsonify({'message': f'Erro ao arquivar log: {str(e)}'}), 500
+
 
 @app.route('/download-logs', methods=['GET'])
 @requires_auth
