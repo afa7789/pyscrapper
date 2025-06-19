@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <title>Painel de Administração - OLN Logística</title>
@@ -7,181 +8,360 @@
         /* Regras gerais para todos os dispositivos */
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            /* Remover margem padrão do body para mais espaço nas bordas */
             background-color: #f5f5f5;
-            line-height: 1.6; /* Melhora a legibilidade do texto */
+            line-height: 1.6;
         }
-        /* Adicionar box-sizing globalmente é uma boa prática para layouts responsivos */
+
         * {
             box-sizing: border-box;
+            /* Essencial para que padding e border sejam incluídos na largura/altura */
         }
 
         .container {
             max-width: 800px;
-            margin: auto;
-            padding: 20px;
+            margin: 20px auto;
+            /* Margem superior/inferior de 20px, centralizado */
+            padding: 25px;
+            /* Aumenta o padding do contêiner */
             background: white;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1); /* Adiciona uma sombra suave */
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+            /* Sombra mais visível */
         }
+
         h1 {
             text-align: center;
-            margin-bottom: 25px; /* Adiciona mais espaço abaixo do título principal */
-            font-size: 2em; /* Tamanho do título principal */
-        }
-        h2 { /* Adicionar estilo para h2, se aplicável */
-            font-size: 1.6em;
-            margin-top: 30px;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 5px;
-        }
-        .form-group {
-            margin-bottom: 20px; /* Aumenta o espaçamento entre os grupos de formulário */
-        }
-        label {
-            display: block;
-            margin-bottom: 8px; /* Aumenta o espaçamento abaixo do label */
-            font-weight: bold;
+            margin-bottom: 30px;
+            /* Mais espaço abaixo do título */
+            font-size: 2.2em;
+            /* Título principal um pouco maior */
             color: #333;
         }
+
+        h2 {
+            font-size: 1.8em;
+            margin-top: 35px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            color: #444;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            /* Aumenta ainda mais o espaçamento entre os grupos de formulário */
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            /* Mais espaço abaixo do label */
+            font-weight: bold;
+            color: #333;
+            font-size: 1.1em;
+            /* Fonte do label um pouco maior */
+        }
+
         input[type="text"],
         input[type="number"],
-        input[type="password"], /* Incluir input[type="password"] aqui */
-        textarea { /* Adicionar textarea, caso venha a ter */
-            width: 100%; /* Faz com que o input ocupe 100% da largura do contêiner pai */
-            padding: 10px; /* Aumenta o padding para melhor toque e visual */
-            font-size: 1.1em; /* Tamanho da fonte dos inputs, relativo ao body font-size */
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 15px;
+            /* Aumenta o padding interno, especialmente lateral */
+            font-size: 1.1em;
+            /* Tamanho da fonte dos inputs */
             border: 1px solid #ccc;
-            border-radius: 4px;
-            transition: border-color 0.3s; /* Adiciona transição suave para foco */
+            border-radius: 6px;
+            /* Bordas levemente mais arredondadas */
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
+
         input[type="text"]:focus,
         input[type="number"]:focus,
-        input[type="password"]:focus,
-        textarea:focus {
-            border-color: #007bff; /* Muda a cor da borda ao focar */
-            outline: none; /* Remove o outline padrão */
+        input[type="password"]:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+            /* Adiciona um brilho ao focar */
+            outline: none;
         }
 
         /* Estilo para parágrafos dentro de form-group (instruções) */
         .form-group p {
-            font-size: 0.9em; /* slightly smaller than base font, but still readable */
+            font-size: 0.9em;
+            /* Mantém o tamanho das instruções menor que o label e input */
             color: #666;
             margin-top: 5px;
-            margin-bottom: 10px; /* Space before input */
+            margin-bottom: 10px;
+            /* Garante espaço suficiente antes do input */
+        }
+
+        /* Estilo para o checkbox */
+        input[type="checkbox"] {
+            margin-right: 10px;
+            /* Espaço entre o checkbox e o texto */
+            transform: scale(1.2);
+            /* Aumenta o tamanho do checkbox */
         }
 
         button {
-            padding: 10px 20px;
-            margin: 5px 5px 5px 0; /* Ajusta a margem dos botões */
-            font-size: 16px;
+            padding: 12px 25px;
+            /* Mais padding para os botões */
+            margin: 8px 5px 8px 0;
+            /* Margem ajustada para melhor distribuição */
+            font-size: 1.05em;
             cursor: pointer;
             border: none;
-            border-radius: 4px;
-            transition: background-color 0.3s ease;
+            border-radius: 5px;
+            transition: background-color 0.3s ease, transform 0.2s;
         }
-        #startBtn { background-color: #4CAF50; color: white; }
-        #startBtn:hover { background-color: #45a049; }
-        #stopBtn { background-color: #f44336; color: white; }
-        #stopBtn:hover { background-color: #da190b; }
-        #downloadHashBtn { background-color:#1976D2;color:white; }
-        #downloadHashBtn:hover { background-color: #115da3; }
-        #archiveLogBtn { background-color:#388e3c;color:white; }
-        #archiveLogBtn:hover { background-color: #2e7031; }
-        #downloadLogsBtn { background-color:#6d4c41;color:white; }
-        #downloadLogsBtn:hover { background-color: #5a3e36; }
+
+        button:hover {
+            transform: translateY(-2px);
+            /* Efeito sutil ao passar o mouse */
+        }
+
+        #startBtn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #startBtn:hover {
+            background-color: #45a049;
+        }
+
+        #stopBtn {
+            background-color: #f44336;
+            color: white;
+        }
+
+        #stopBtn:hover {
+            background-color: #da190b;
+        }
+
+        /* Estilos para os outros botões */
+        #downloadHashBtn {
+            background-color: #1976D2;
+            color: white;
+        }
+
+        #downloadHashBtn:hover {
+            background-color: #115da3;
+        }
+
+        #archiveLogBtn {
+            background-color: #388e3c;
+            color: white;
+        }
+
+        #archiveLogBtn:hover {
+            background-color: #2e7031;
+        }
+
+        #downloadLogsBtn {
+            background-color: #6d4c41;
+            color: white;
+        }
+
+        #downloadLogsBtn:hover {
+            background-color: #5a3e36;
+        }
+
+        /* Quebra de linha para botões menores em mobile */
+        .button-group-bottom {
+            /* Adicione uma div com essa classe em torno dos três botões de baixo */
+            display: flex;
+            flex-wrap: wrap;
+            /* Permite que os itens quebrem linha */
+            justify-content: center;
+            /* Centraliza os botões quando quebram */
+            gap: 10px;
+            /* Espaçamento entre os botões */
+            margin-top: 20px;
+        }
+
+        /* ... (restante do seu CSS para status, logOutput, etc.) */
 
         .status {
-            display: block; /* Mude para block para ocupar a própria linha */
-            margin-top: 15px; /* Espaço acima do status */
-            margin-bottom: 10px;
-            font-size: 1.05em;
+            display: block;
+            margin-top: 20px;
+            /* Mais espaço acima do status */
+            margin-bottom: 15px;
+            font-size: 1.1em;
             color: #2196F3;
             font-weight: bold;
-            text-align: center; /* Centraliza o texto de status */
+            text-align: center;
         }
+
         #logOutput {
-            margin-top: 20px;
-            padding: 15px; /* Aumenta o padding do log output */
-            background: #fdfdfd; /* Cor de fundo mais clara para o log */
-            border: 1px solid #ddd; /* Borda mais suave */
-            border-radius: 4px;
+            margin-top: 25px;
+            padding: 18px;
+            /* Mais padding no log */
+            background: #fdfdfd;
+            border: 1px solid #ddd;
+            border-radius: 6px;
             white-space: pre-wrap;
-            max-height: 400px;
+            max-height: 450px;
+            /* Altura máxima ligeiramente maior */
             overflow-y: auto;
-            font-family: 'Courier New', Courier, monospace; /* Fonte monoespaçada para logs */
-            font-size: 0.9em; /* Tamanho da fonte do log */
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
             color: #333;
+            line-height: 1.4;
+            /* Melhora a legibilidade do log */
         }
+
         .log-header {
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             font-weight: bold;
             color: #333;
-            text-align: center; /* Centraliza o cabeçalho do log */
-            font-size: 1.2em;
+            text-align: center;
+            font-size: 1.3em;
         }
 
         /* MEDIA QUERIES PARA CELULARES */
         @media (max-width: 600px) {
             body {
-                margin: 10px; /* Reduz a margem geral do corpo */
-                font-size: 15px; /* Base da fonte um pouco menor para celular */
+                margin: 0;
+                /* Remove margens do body para máxima utilização do espaço */
+                font-size: 14px;
+                /* Tamanho base da fonte um pouco menor no geral para celular */
             }
 
             .container {
-                padding: 15px; /* Reduz o padding do contêiner */
+                margin: 0;
+                /* Remove margem superior/inferior em mobile */
+                padding: 15px;
+                /* Reduz o padding para não apertar demais */
+                border-radius: 0;
+                /* Remove border-radius para ocupar 100% da largura */
+                box-shadow: none;
+                /* Remove sombra em mobile para um visual mais limpo */
             }
 
             h1 {
-                font-size: 1.8em; /* Reduz o tamanho do título principal */
-                margin-bottom: 20px;
+                font-size: 1.6em;
+                /* Reduz mais o tamanho do título principal */
+                margin-bottom: 15px;
             }
+
             h2 {
-                font-size: 1.4em;
-                margin-top: 20px;
+                font-size: 1.3em;
+                margin-top: 25px;
                 margin-bottom: 10px;
             }
 
-            /* Aumenta o tamanho dos inputs e seu padding para facilitar o toque no celular */
-            input[type="text"],
-            input[type="number"],
-            input[type="password"],
-            textarea {
-                padding: 14px; /* Aumenta o padding consideravelmente */
-                font-size: 1.15em; /* Garante que a fonte do input seja bem legível */
-                -webkit-appearance: none; /* Remove estilos padrão de input em iOS */
-                -moz-appearance: none;    /* Remove estilos padrão de input em Firefox Mobile */
-                appearance: none;         /* Estilo padrão */
-                border-radius: 6px; /* Levemente mais arredondado para celular */
-            }
-
-            .form-group p {
-                font-size: 0.95em; /* Garante que os textos de instrução sejam legíveis */
-                margin-top: 3px;
-                margin-bottom: 8px;
+            .form-group {
+                margin-bottom: 18px;
+                /* Espaçamento entre grupos */
             }
 
             label {
-                font-size: 1em; /* Garante que os labels sejam bem visíveis */
-                margin-bottom: 5px;
+                font-size: 1em;
+                /* Ajusta o tamanho do label */
+                margin-bottom: 6px;
+            }
+
+            /* Aumenta significativamente o padding e a fonte dos inputs para celular */
+            input[type="text"],
+            input[type="number"],
+            input[type="password"] {
+                padding: 16px 12px;
+                /* Padding maior para facilitar o toque */
+                font-size: 1.15em;
+                /* Garante fonte grande o suficiente nos inputs */
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                appearance: none;
+                border-radius: 4px;
+                /* Mantém um pequeno arredondamento */
+            }
+
+            .form-group p {
+                font-size: 0.85em;
+                /* Reduz o tamanho das instruções para otimizar espaço */
+                margin-top: 2px;
+                margin-bottom: 6px;
+            }
+
+            input[type="checkbox"] {
+                transform: scale(1.1);
+                /* Ajusta o tamanho do checkbox para celular */
+                margin-right: 8px;
             }
 
             button {
-                width: 100%; /* Faz com que os botões ocupem a largura total */
-                margin: 8px 0; /* Aumenta a margem vertical entre botões */
-                padding: 15px; /* Aumenta o padding dos botões para facilitar o toque */
-                font-size: 1.05em; /* Ajusta o tamanho da fonte dos botões */
+                width: 100%;
+                /* Botões sempre com largura total em mobile */
+                margin: 6px 0;
+                /* Margem vertical ajustada */
+                padding: 16px;
+                /* Padding maior para botões em mobile */
+                font-size: 1em;
+                /* Ajusta a fonte dos botões */
             }
 
-            .status, .log-header {
-                font-size: 1em; /* Ajusta o tamanho do status e cabeçalho do log */
+            .button-group-bottom {
+                flex-direction: column;
+                /* Força os botões a ficarem em coluna */
+                gap: 8px;
+                /* Espaçamento entre os botões */
+                margin-top: 15px;
+            }
+
+            .status {
+                font-size: 0.95em;
+                margin-top: 15px;
+                margin-bottom: 10px;
             }
 
             #logOutput {
-                max-height: 300px; /* Reduz a altura máxima do log para telas menores */
-                padding: 10px;
-                font-size: 0.85em; /* Reduz a fonte do log para caber mais */
+                max-height: 250px;
+                /* Reduz a altura máxima do log para telas menores */
+                padding: 12px;
+                font-size: 0.8em;
+                /* Fonte do log menor para caber mais conteúdo */
+            }
+
+            .log-header {
+                font-size: 1.1em;
+                margin-bottom: 10px;
+            }
+        }
+
+        /* Media Query para telas muito pequenas, como iPhone 5/SE */
+        @media (max-width: 375px) {
+            body {
+                font-size: 13px;
+                /* Reduz um pouco mais a fonte base */
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            h2 {
+                font-size: 1.2em;
+            }
+
+            input[type="text"],
+            input[type="number"],
+            input[type="password"] {
+                padding: 14px 10px;
+                /* Padding ligeiramente menor para inputs */
+                font-size: 1.1em;
+            }
+
+            button {
+                padding: 14px;
+                /* Padding dos botões */
+                font-size: 0.95em;
+            }
+
+            #logOutput {
+                max-height: 200px;
+                font-size: 0.75em;
             }
         }
     </style>
@@ -239,17 +419,23 @@
         </div>
         <div class="form-group">
             <label for="allowKeywordSubsets">Permitir subconjuntos das palavras-chave:</label>
-            <p> Cuidado ao usar: com proxy, isso faz mais chamadas e gasta mais créditos. Bom para tentar achar resultados diferentes.</p>
+            <p> Cuidado ao usar: com proxy, isso faz mais chamadas e gasta mais créditos. Bom para tentar achar
+                resultados diferentes.</p>
             <input type="checkbox" id="allowKeywordSubsets" {{ 'checked' if allow_keyword_subsets else '' }}>
         </div>
         <h2>Controle do monitor de procura </h2>
-        <p>Ao trocar valores é bom parar para interromper qualquer busca, e iniciar após. Sem iniciar os valores novos não são salvos no servidor. </p>
+        <p>Ao trocar valores é bom parar para interromper qualquer busca, e iniciar após. Sem iniciar os valores novos
+            não são salvos no servidor. </p>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
         <br>
-        <button id="downloadHashBtn" style="background-color:#1976D2;color:white;" onclick="window.open('/download-hash-file','_blank')">⬇️ Baixar Hash File</button>
-        <button id="archiveLogBtn" style="background-color:#388e3c;color:white;" onclick="fetch('/archive_log', {method: 'GET'}).then(r => r.json()).then(data => alert(data.message)).catch(e => alert('Erro ao arquivar log: ' + e));">🆕 Arquivar Log Atual</button>
-        <button id="downloadLogsBtn" style="background-color:#6d4c41;color:white;" onclick="window.open('/download-logs','_blank')">📦 Baixar Todos Logs</button>
+        <button id="downloadHashBtn" style="background-color:#1976D2;color:white;"
+            onclick="window.open('/download-hash-file','_blank')">⬇️ Baixar Hash File</button>
+        <button id="archiveLogBtn" style="background-color:#388e3c;color:white;"
+            onclick="fetch('/archive_log', {method: 'GET'}).then(r => r.json()).then(data => alert(data.message)).catch(e => alert('Erro ao arquivar log: ' + e));">🆕
+            Arquivar Log Atual</button>
+        <button id="downloadLogsBtn" style="background-color:#6d4c41;color:white;"
+            onclick="window.open('/download-logs','_blank')">📦 Baixar Todos Logs</button>
         <br>
         <span id="autoUpdateStatus" class="status">Carregando logs...</span>
         <div class="log-header">Logs do Sistema (Atualização Automática)</div>
@@ -282,24 +468,24 @@
                     'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
                 }
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Erro ao carregar logs: ' + response.status);
-                }
-                return response.text();
-            })
-            .then(data => {
-                const logOutput = document.getElementById('logOutput');
-                // Filter out lines containing "GET /logs HTTP/1.1" 200
-                const filteredData = data.split('\n').filter(line => !line.includes('GET /logs HTTP/1.1')).join('\n');
-                logOutput.textContent = filteredData || 'Nenhum log disponível';
-                // Remove or comment out the auto-scroll line
-                // logOutput.scrollTop = logOutput.scrollHeight;
-            })
-            .catch(error => {
-                console.error('Erro ao carregar logs:', error);
-                document.getElementById('logOutput').textContent = 'Erro ao carregar logs: ' + error.message;
-            });
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Erro ao carregar logs: ' + response.status);
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    const logOutput = document.getElementById('logOutput');
+                    // Filter out lines containing "GET /logs HTTP/1.1" 200
+                    const filteredData = data.split('\n').filter(line => !line.includes('GET /logs HTTP/1.1')).join('\n');
+                    logOutput.textContent = filteredData || 'Nenhum log disponível';
+                    // Remove or comment out the auto-scroll line
+                    // logOutput.scrollTop = logOutput.scrollHeight;
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar logs:', error);
+                    document.getElementById('logOutput').textContent = 'Erro ao carregar logs: ' + error.message;
+                });
         }
 
         function startMonitoring() {
@@ -316,7 +502,7 @@
                 max_repeat_time: document.getElementById('maxRepeatTime').value,
                 allow_subset: document.getElementById('allowKeywordSubsets').checked
             };
-            
+
             fetch('/start', {
                 method: 'POST',
                 headers: {
@@ -325,15 +511,15 @@
                 },
                 body: JSON.stringify(data)
             })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                // Os logs já estão sendo atualizados automaticamente
-            })
-            .catch(error => {
-                console.error('Erro ao iniciar monitoramento:', error);
-                alert('Erro ao iniciar monitoramento: ' + error.message);
-            });
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    // Os logs já estão sendo atualizados automaticamente
+                })
+                .catch(error => {
+                    console.error('Erro ao iniciar monitoramento:', error);
+                    alert('Erro ao iniciar monitoramento: ' + error.message);
+                });
         }
 
         function stopMonitoring() {
@@ -343,28 +529,29 @@
                     'Authorization': 'Basic ' + btoa('{{ username }}:{{ password }}')
                 }
             })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                // Os logs continuam sendo atualizados automaticamente
-            })
-            .catch(error => {
-                console.error('Erro ao parar monitoramento:', error);
-                alert('Erro ao parar monitoramento: ' + error.message);
-            });
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    // Os logs continuam sendo atualizados automaticamente
+                })
+                .catch(error => {
+                    console.error('Erro ao parar monitoramento:', error);
+                    alert('Erro ao parar monitoramento: ' + error.message);
+                });
         }
 
         // Inicializar quando a página carregar
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('Página carregada, iniciando atualização automática de logs...');
             fetchLogs(); // Carrega os logs imediatamente
             startAutoUpdate(); // Inicia a atualização automática
         });
 
         // Parar a atualização quando a página for fechada/recarregada
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             stopAutoUpdate();
         });
     </script>
 </body>
+
 </html>
