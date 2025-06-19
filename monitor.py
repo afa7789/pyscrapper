@@ -34,13 +34,18 @@ class Monitor:
         self.batch_size = batch_size
         self.seen_ads = self._load_seen_ads()
 
-        # Dynamic interval settings
+        # Dynamic interval settings for retry between cycles
         self.base_interval_minutes = 20
         self.max_interval_minutes = 50
         self.interval_multiplier = 5
         self.current_interval_minutes = self.base_interval_minutes
         self.incomplete_page_count = 0
         self.incomplete_page_threshold = 3
+
+        self.page_depth = page_depth # Maximum number of pages to scrape
+        self.retry_attempts = retry_attempts # Max retries for a single page
+        self.min_repeat_time = min_repeat_time # Minimum time to wait before retrying a page
+        self.max_repeat_time = max_repeat_time # Maximum time to wait before retrying a page
 
     def _hash_ad(self, ad):
         return hashlib.sha256(ad['url'].encode('utf-8')).hexdigest()
@@ -172,7 +177,12 @@ class Monitor:
                     # self.log_callback(f"🔄 Processando permutação {perm_idx + 1}/{num_permutations_to_use}: {', '.join(perm_keywords)}")
 
                     # 2. Iterar por páginas (máximo 3 páginas por permutação)
-                    max_pages_per_permutation = 3
+                    max_pages_per_permutation = self.page_depth
+
+                    # both of this parameters could be set in admin.html and as a call but we are retrying
+                    # and controlling how we get the pages on the monitor
+                    pages_per_scrape = 1 # Number of pages to scrape per iteration
+                    number_retry_scrape= 1 # Number of retries inside of scrape function
 
                     for page_num in range(1, max_pages_per_permutation + 1):
                         self.log_callback(
@@ -181,7 +191,7 @@ class Monitor:
                         # 3. Repetir até sucesso, com delays aleatórios
                         page_scrape_success = False
                         page_attempt = 0
-                        max_page_attempts = 100  # Max retries for a single page with this permutation
+                        max_page_attempts = self.retry_attempts  # Max retries for a single page with this permutation
                         while not page_scrape_success and page_attempt < max_page_attempts:
                             if self.stop_event.is_set():  # <--- Check the event here too
                                 self.running = False
@@ -198,11 +208,11 @@ class Monitor:
                                     keywords=self.keywords,  # Use original keywords for filtering extracted ads
                                     negative_keywords_list=self.negative_keywords_list,
                                     start_page=page_num,  # Pass the current page as start_page
-                                    num_pages_to_scrape=1,
                                     save_page=False,
-                                    page_retry_attempts=1,
-                                    page_retry_delay_min=30,
-                                    page_retry_delay_max=67
+                                    num_pages_to_scrape=pages_per_scrape,
+                                    page_retry_attempts=number_retry_scrape,
+                                    page_retry_delay_min=self.min_repeat_time,
+                                    page_retry_delay_max=self.max_repeat_time
                                 )
 
                                 current_cycle_new_ads.extend(new_ads_from_page)
