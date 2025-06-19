@@ -52,7 +52,7 @@ class TelegramBot:
                 # e.g., by retrying or logging and continuing to the next chunk.
                 raise Exception(f"Erro ao enviar mensagem: {response.text}")
             else:
-                self.log_callback(f"Mensagem enviada com sucesso: {chunk[:50]}...") # Log a snippet
+                self.log_callback(f"Mensagem enviada com sucesso: {chunk[:18]}...") # Log a snippet
 
 
     def list_interacted_users(self):
