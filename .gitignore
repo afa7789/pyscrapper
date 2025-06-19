@@ -15,3 +15,6 @@ venv_*
 scraper_test_errors.log
 *stress_test_results.json
 TODO.md
+monitor_status.json
+app.log.*
+config.json

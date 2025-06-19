@@ -46,7 +46,7 @@ class MarketRoxoScraperCloudflare:
         self.delay_max = 35
 
         self.log_callback(
-            f"🔍 MarketRoxoScraper inicializado com bypass Cloudflare")
+            f"🥸 MarketRoxoScraper inicializado com bypass Cloudflare")
 
     def _setup_proxies(self, proxies):
         """Configura proxies se fornecidos"""
@@ -418,7 +418,7 @@ class MarketRoxoScraperCloudflare:
         collected_ads = []
 
         self.log_callback(
-            f"🚀 Iniciando scraping para: {search_query} (query keywords) a partir da página {start_page} por {num_pages_to_scrape} páginas.")
+            f"🚀 Iniciando scrape para: {search_query} (query keywords) a partir da página {start_page} por {num_pages_to_scrape} páginas.")
 
         for page_offset in range(num_pages_to_scrape):
             page_num = start_page + page_offset
@@ -475,7 +475,7 @@ class MarketRoxoScraperCloudflare:
                     if new_ads:
                         collected_ads.extend(new_ads)
                         self.log_callback(
-                            f"✅ Encontrados {len(new_ads)} anúncios na página {page_num}.")
+                            f"🔎 Encontrados {len(new_ads)} anúncios na página {page_num}.")
                         current_page_success = True
                         break
                     else:

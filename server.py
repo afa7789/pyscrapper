@@ -208,6 +208,7 @@ def admin():
     retry_attempts_val = current_dynamic_config.get("retry_attempts", 100)
     min_repeat_time_val = current_dynamic_config.get("min_repeat_time", 15)
     max_repeat_time_val = current_dynamic_config.get("max_repeat_time", 67)
+    allow_subset_val = current_dynamic_config.get("allow_subset", False)
 
     return render_template(
         'admin.html',
@@ -219,6 +220,7 @@ def admin():
         retry_attempts=retry_attempts_val,
         min_repeat_time=min_repeat_time_val,
         max_repeat_time=max_repeat_time_val,
+        allow_keyword_subsets=allow_subset_val,
         username=USERNAME,
         password=PASSWORD
     )
@@ -262,6 +264,7 @@ def start():
         retry_attempts = int(data.get('retry_attempts', 100))
         min_repeat_time = int(data.get('min_repeat_time', 15))
         max_repeat_time = int(data.get('max_repeat_time', 67))
+        allow_subset = data.get('allow_subset', False)
 
         data_to_save = {
             "keywords": keywords_list_str,
@@ -271,7 +274,8 @@ def start():
             "page_depth": page_depth,
             "retry_attempts": retry_attempts,
             "min_repeat_time": min_repeat_time,
-            "max_repeat_time": max_repeat_time
+            "max_repeat_time": max_repeat_time,
+            "allow_subset": allow_subset
         }
         save_dynamic_config(data_to_save)
 
@@ -290,6 +294,9 @@ def start():
         filtered_keywords = [
             kw for kw in keywords_list if kw not in negative_keywords_list]
 
+        min_subset_size = max(2, len(filtered_keywords) // 2)
+        max_subset_size = len(filtered_keywords)
+
         monitor = Monitor(
             keywords=filtered_keywords,
             negative_keywords_list=negative_keywords_list,
@@ -301,7 +308,10 @@ def start():
             page_depth=page_depth,
             retry_attempts=retry_attempts,
             min_repeat_time=min_repeat_time,
-            max_repeat_time=max_repeat_time
+            max_repeat_time=max_repeat_time,
+            allow_subset=allow_subset,
+            min_subset_size=min_subset_size,
+            max_subset_size=max_subset_size
         )
 
         logger.info(f"Monitor criado: {monitor}")

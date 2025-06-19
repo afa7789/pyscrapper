@@ -58,6 +58,11 @@
             <p>Tempo máximo entre tentativas de repetição, para evitar bloqueios.</p>
             <input type="number" id="maxRepeatTime" value="{{ max_repeat_time }}" min="1">
         </div>
+        <div class="form-group">
+            <label for="allowKeywordSubsets">Permitir subconjuntos das keywords:</label>
+            <p> Cuidado ao usar, com proxy isso faz mais chamadas e gasta mais creditos. Bom p/ tentar achar resultados diferentes.</p>
+            <input type="checkbox" id="allowKeywordSubsets" {{ 'checked' if allow_keyword_subsets else '' }}>
+        </div>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
         <button id="stopBtn" onclick="stopMonitoring()">Parar Monitoramento</button>
         <span id="autoUpdateStatus" class="status">Carregando logs...</span>
@@ -121,7 +126,8 @@
                 page_depth: document.getElementById('pageDepth').value,
                 retry_attempts: document.getElementById('retryAttempts').value,
                 min_repeat_time: document.getElementById('minRepeatTime').value,
-                max_repeat_time: document.getElementById('maxRepeatTime').value
+                max_repeat_time: document.getElementById('maxRepeatTime').value,
+                allow_subset: document.getElementById('allowKeywordSubsets').checked
             };
             
             fetch('/start', {
