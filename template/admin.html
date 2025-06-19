@@ -20,7 +20,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Painel de Procura, MarketRoxo</h1>
+        <h1>Painel de Procura do MarketRoxo</h1>
         <div class="form-group">
             <label for="keywords">Palavras-chave (separadas por vírgula):</label>
             <input type="text" id="keywords" value="{{ keywords_list }}">
@@ -34,23 +34,29 @@
             <input type="text" id="token" value="{{ token }}">
         </div>
         <div class="form-group">
-            <label for="chatInput">Chat ID ou Número de Telefone:</label>
+            <label for="chatInput">ID do Chat ou Número de Telefone:</label>
             <input type="text" id="chatInput" value="{{ chat_input }}">
         </div>
         <div class="form-group">
-            <label for="interval_monitor">Tempo entre intervalos de Scrape ( minutos ):</label>
-            <p>Tempo grande de intervalor entre o ato de vasculhar multiplas páginas.</p>
+            <label for="interval_monitor">Tempo entre intervalos de Varredura (minutos):</label>
+            <p>Tempo longo de intervalo entre a varredura de múltiplas páginas.</p>
             <input type="number" id="interval_monitor" value="{{ interval_monitor }}" min="1">
         </div>
         <div class="form-group">
+            <label for="batch_size">Anúncios por mensagem:</label>
+            <p>Quantos anúncios o programa vai enviar por mensagem no Telegram.</p>
+            <p>Com 1 mensagem, serão exibidas as miniaturas dos anúncios. </p>
+            <input type="number" id="batch_size" value="{{ batch_size }}" min="1" max="18">
+        </div>
+        <div class="form-group">
             <label for="pageDepth">Profundidade de páginas:</label>
-            <p>Quantas páginas o scrape deve procurar, além da página 1.</p>
-            <p>Após já ter obtido muitos resultados, e só for atualizar vale reduzir.</p>
+            <p>Quantas páginas a varredura deve procurar, além da página 1.</p>
+            <p>Após obter muitos resultados, se a intenção for apenas atualizar, é recomendável reduzir.</p>
             <input type="number" id="pageDepth" value="{{ page_depth }}" min="1">
         </div>
         <div class="form-group">
             <label for="retryAttempts">Tentativas até sucesso:</label>
-            <p>Quantas vezes ele deve repetir um chamado de página procurando burlar bloqueio.</p>
+            <p>Quantas vezes ele deve repetir uma chamada de página para tentar burlar bloqueios.</p>
             <input type="number" id="retryAttempts" value="{{ retry_attempts }}" min="1">
         </div>
         <div class="form-group">
@@ -64,8 +70,8 @@
             <input type="number" id="maxRepeatTime" value="{{ max_repeat_time }}" min="1">
         </div>
         <div class="form-group">
-            <label for="allowKeywordSubsets">Permitir subconjuntos das keywords:</label>
-            <p> Cuidado ao usar, com proxy isso faz mais chamadas e gasta mais creditos. Bom p/ tentar achar resultados diferentes.</p>
+            <label for="allowKeywordSubsets">Permitir subconjuntos das palavras-chave:</label>
+            <p> Cuidado ao usar: com proxy, isso faz mais chamadas e gasta mais créditos. Bom para tentar achar resultados diferentes.</p>
             <input type="checkbox" id="allowKeywordSubsets" {{ 'checked' if allow_keyword_subsets else '' }}>
         </div>
         <button id="startBtn" onclick="startMonitoring()">Iniciar Monitoramento</button>
@@ -133,6 +139,7 @@
                 token: document.getElementById('token').value,
                 chat_input: document.getElementById('chatInput').value,
                 interval_monitor: document.getElementById('interval_monitor').value,
+                batch_size: document.getElementById('batch_size').value,
                 page_depth: document.getElementById('pageDepth').value,
                 retry_attempts: document.getElementById('retryAttempts').value,
                 min_repeat_time: document.getElementById('minRepeatTime').value,

@@ -229,6 +229,7 @@ def admin():
     interval_monitor_val = current_dynamic_config.get("interval_monitor", 30) 
     max_repeat_time_val = current_dynamic_config.get("max_repeat_time", 67)
     allow_subset_val = current_dynamic_config.get("allow_subset", False)
+    batch_size_val = current_dynamic_config.get("batch_size", 1)
 
     return render_template(
         'admin.html',
@@ -242,6 +243,7 @@ def admin():
         min_repeat_time=min_repeat_time_val,
         max_repeat_time=max_repeat_time_val,
         allow_keyword_subsets=allow_subset_val,
+        batch_size=batch_size_val,
         username=USERNAME,
         password=PASSWORD
     )
@@ -286,14 +288,16 @@ def start():
         min_repeat_time = int(data.get('min_repeat_time', 15))
         max_repeat_time = int(data.get('max_repeat_time', 67))
         allow_subset = data.get('allow_subset', False)
-        interval_monitor = int(data.get('interval_monitor', 30))  # Novo parâmetro
+        interval_monitor = int(data.get('interval_monitor', 30))
+        batch_size = int(data.get('batch_size', 1))
 
         data_to_save = {
             "keywords": keywords_list_str,
             "negative_keywords_list": negative_keywords_list_str,
             "token": token,
             "chat_input": chat_input,
-            "interval_monitor": interval_monitor,  # Novo parâmetro
+            "interval_monitor": interval_monitor, 
+            "batch_size": batch_size, 
             "page_depth": page_depth,
             "retry_attempts": retry_attempts,
             "min_repeat_time": min_repeat_time,
@@ -326,9 +330,9 @@ def start():
             scraper=scraper,
             telegram_bot=telegram_bot,
             chat_id=chat_input,
+            batch_size=batch_size,
             monitoring_interval=interval_monitor,
             log_callback=logger.info,
-            # Se quiser passar os novos parâmetros ao Monitor, adicione aqui
             page_depth=page_depth,
             retry_attempts=retry_attempts,
             min_repeat_time=min_repeat_time,

@@ -16,7 +16,8 @@ class Monitor:
         scraper, telegram_bot,
         chat_id, log_callback, hash_file=None,
         monitoring_interval=30,  # Intervalo de monitoramento em minutos
-        batch_size=15, page_depth=3,
+        # batch_size=1 faz receber de 1 em 1 anuncio no telegram.
+        batch_size=1, page_depth=3,
         retry_attempts=100, min_repeat_time=17,
         max_repeat_time=65,
         allow_subset=False, # Novo parâmetro para ligar/desligar a geração de subconjuntos
