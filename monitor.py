@@ -247,14 +247,21 @@ class Monitor:
                 if not self.running:
                     break
 
+                # Cria uma lista de tuplas (hash, ad) para todos os anúncios do ciclo atual
+                hash_ad_tuples = [(self._hash_ad(ad), ad) for ad in current_cycle_new_ads]
                 truly_new_ads = []
                 truly_new_ads_hash = []
-                for ad in current_cycle_new_ads:
-                    ad_hash = self._hash_ad(ad)
-                    if ad_hash not in self.seen_ads:
-                        self.seen_ads.add(ad_hash)
-                        truly_new_ads_hash.append(ad_hash)
-                        truly_new_ads.append(ad)
+                for ad_hash, ad in hash_ad_tuples:
+                    # Verifica se o anúncio já foi visto anteriormente
+                    if ad_hash in self.seen_ads:
+                        continue
+                    # Verifica se o mesmo anúncio (baseado no hash) já está sendo considerado neste ciclo
+                    if ad_hash in truly_new_ads_hash:
+                        continue
+                    # Se o anúncio é novo, adiciona-o à lista e marca como visto
+                    truly_new_ads_hash.append(ad_hash)
+                    truly_new_ads.append(ad)
+                    # self.seen_ads.add(ad_hash)
 
                 if truly_new_ads:
                     self.log_callback(
