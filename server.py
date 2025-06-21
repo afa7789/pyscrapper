@@ -231,6 +231,7 @@ def admin():
     max_repeat_time_val = current_dynamic_config.get("max_repeat_time", 67)
     allow_subset_val = current_dynamic_config.get("allow_subset", False)
     batch_size_val = current_dynamic_config.get("batch_size", 1)
+    number_set_val = current_dynamic_config.get("number_set", 4)
 
     return render_template(
         'admin.html',
@@ -245,6 +246,7 @@ def admin():
         max_repeat_time=max_repeat_time_val,
         allow_keyword_subsets=allow_subset_val,
         batch_size=batch_size_val,
+        number_set=number_set_val,
         username=USERNAME,
         password=PASSWORD
     )
@@ -291,6 +293,7 @@ def start():
         allow_subset = data.get('allow_subset', False)
         interval_monitor = int(data.get('interval_monitor', 30))
         batch_size = int(data.get('batch_size', 1))
+        number_set = int(data.get('number_set', 4))
 
         data_to_save = {
             "keywords": keywords_list_str,
@@ -300,6 +303,7 @@ def start():
             "interval_monitor": interval_monitor, 
             "batch_size": batch_size, 
             "page_depth": page_depth,
+            "number_set": number_set,
             "retry_attempts": retry_attempts,
             "min_repeat_time": min_repeat_time,
             "max_repeat_time": max_repeat_time,
