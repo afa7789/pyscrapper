@@ -190,7 +190,7 @@ class Monitor:
 
                     for page_num in range(1, max_pages_per_set + 1):
                         self.log_callback(
-                            f"📚 Tentando raspar página {page_num} para o conjunto de palavras chave atual...")
+                            f"📚 Tentando raspar página {page_num}/{max_pages_per_set} para o conjunto de palavras chave atual... , conjunto: {set_idx + 1}/{len(selected_keyword_sets}.")
 
                         page_scrape_success = False
                         page_attempt = 0
