@@ -397,12 +397,6 @@
             <input type="number" id="batch_size" value="{{ batch_size }}" min="1" max="18">
         </div>
         <div class="form-group">
-            <label for="number_set">Quantos SubConjuntos:</label>
-            <p>Subconjuntos é o número de combinações das palavras chaves, p/ tentar achar anuncios difernetes</p>
-            <p>Em um conjunto (A,B,C), os subconjuntos são: (ABC, BC, AB, AC,A,B,C), ele vai sortear X subconjuntos p/ usar. </p>
-            <input type="number" id="number_set" value="{{ number_set }}" min="1" max="18">
-        </div>
-        <div class="form-group">
             <label for="pageDepth">Profundidade de páginas:</label>
             <p>Quantas páginas a varredura deve procurar, além da página 1.</p>
             <p>Após obter muitos resultados, se a intenção for apenas atualizar, é recomendável reduzir.</p>
@@ -428,6 +422,12 @@
             <p> Cuidado ao usar: com proxy, isso faz mais chamadas e gasta mais créditos. Bom para tentar achar
                 resultados diferentes.</p>
             <input type="checkbox" id="allowKeywordSubsets" {{ 'checked' if allow_keyword_subsets else '' }}>
+        </div>
+        <div class="form-group">
+            <label for="number_set">Quantos SubConjuntos:</label>
+            <p>Subconjuntos é o número de combinações das palavras chaves, p/ tentar achar anuncios diferentes, minimo 3.</p>
+            <p>Em um conjunto (A,B,C), os subconjuntos são: (ABC, BC, AB, AC,A,B,C), ele vai sortear X subconjuntos p/ usar. </p>
+            <input type="number" id="number_set" value="{{ number_set }}" min="3">
         </div>
         <h2>Controle do monitor de procura </h2>
         <p>Ao trocar valores é bom parar para interromper qualquer busca, e iniciar após. Sem iniciar os valores novos

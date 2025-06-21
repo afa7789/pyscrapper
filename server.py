@@ -336,6 +336,7 @@ def start():
             telegram_bot=telegram_bot,
             chat_id=chat_input,
             batch_size=batch_size,
+            number_set=number_set,
             monitoring_interval=interval_monitor,
             log_callback=logger.info,
             page_depth=page_depth,

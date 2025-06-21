@@ -18,6 +18,7 @@ class Monitor:
         monitoring_interval=30,  # Intervalo de monitoramento em minutos
         # batch_size=1 faz receber de 1 em 1 anuncio no telegram.
         batch_size=1, page_depth=3,
+        number_set=4,
         retry_attempts=100, min_repeat_time=17,
         max_repeat_time=65,
         allow_subset=False, # Novo parâmetro para ligar/desligar a geração de subconjuntos
@@ -50,6 +51,7 @@ class Monitor:
         self.retry_attempts = retry_attempts
         self.min_repeat_time = min_repeat_time
         self.max_repeat_time = max_repeat_time
+        self.number_set = number_set
 
         self.min_subset_size = min_subset_size # Não serão usados
         self.max_subset_size = max_subset_size # Não serão usados
@@ -171,7 +173,7 @@ class Monitor:
                         self.log_callback("⚠️ Nenhuma combinação de subconjunto gerada com as configurações atuais. Usando palavras-chave originais como fallback.")
                         selected_keyword_sets = [tuple(self.keywords)]
                     else:
-                        num_sets_to_use = min(4, len(all_keyword_subsets)) # Você pode ajustar este número
+                        num_sets_to_use = min(self.number_set, len(all_keyword_subsets)) # Você pode ajustar este número
                         selected_keyword_sets = random.sample(all_keyword_subsets, num_sets_to_use)
                         self.log_callback(f"🎲 Selecionados {num_sets_to_use} subconjuntos de palavras-chave para esta verificação.")
 
