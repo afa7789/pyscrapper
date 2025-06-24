@@ -1,5 +1,3 @@
-# monitor.py
-
 import threading
 import time
 from datetime import datetime, timezone, timedelta
@@ -7,40 +5,37 @@ import random
 import hashlib
 import os
 from emoji_sorter import get_random_emoji
-from itertools import combinations # Apenas combinations é necessário
-
+from itertools import combinations
+from logging_config import get_logger
 
 class Monitor:
     def __init__(self,
-        keywords, negative_keywords_list,
-        scraper, telegram_bot,
-        chat_id, log_callback, hash_file=None,
-        monitoring_interval=30,  # Intervalo de monitoramento em minutos
-        # batch_size=1 faz receber de 1 em 1 anuncio no telegram.
-        batch_size=1, page_depth=3,
-        number_set=4,
-        retry_attempts=100, min_repeat_time=17,
-        max_repeat_time=65,
-        allow_subset=False, # Novo parâmetro para ligar/desligar a geração de subconjuntos
-        min_subset_size=2, max_subset_size=None # Parâmetros para controle do tamanho do subconjunto
-    ):
+                 keywords, negative_keywords_list,
+                 scraper, telegram_bot,
+                 chat_id, hash_file=None,
+                 monitoring_interval=30,
+                 batch_size=1, page_depth=3,
+                 number_set=4,
+                 retry_attempts=100, min_repeat_time=17,
+                 max_repeat_time=65,
+                 allow_subset=False,
+                 min_subset_size=2, max_subset_size=None):
         self.keywords = keywords
         self.negative_keywords_list = negative_keywords_list
         self.scraper = scraper
         self.telegram_bot = telegram_bot
         self.chat_id = chat_id
-        self.log_callback = log_callback
+        self.logger = get_logger()
         self.running = False
         self.stop_event = threading.Event()
-        self.monitoring_interval = monitoring_interval  # Intervalo de monitoramento em minutos
+        self.monitoring_interval = monitoring_interval
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
-            data_dir = os.path.join(
-                os.path.expanduser("~"), ".marketroxo_data")
+            data_dir = os.path.join(os.path.expanduser("~"), ".marketroxo_data")
             os.makedirs(data_dir, exist_ok=True)
             self.hash_file = os.path.join(data_dir, "seen_ads.txt")
-            self.log_callback(f"📁 Using hash file at: {self.hash_file}")
+            self.logger.info(f"📁 Using hash file at: {self.hash_file}")
         else:
             self.hash_file = hash_file
 
@@ -53,11 +48,10 @@ class Monitor:
         self.max_repeat_time = max_repeat_time
         self.number_set = number_set
 
-        self.min_subset_size = min_subset_size # Não serão usados
-        self.max_subset_size = max_subset_size # Não serão usados
-        self.allow_subset = allow_subset # Armazena o novo parâmetro
-        self.log_callback(
-            f"👹 Allowing keyword subsets: {self.allow_subset} (min: {self.min_subset_size}, max: {self.max_subset_size})")
+        self.min_subset_size = min_subset_size
+        self.max_subset_size = max_subset_size
+        self.allow_subset = allow_subset
+        self.logger.info(f"👹 Allowing keyword subsets: {self.allow_subset} (min: {self.min_subset_size}, max: {self.max_subset_size})")
 
     def _hash_ad(self, ad):
         return hashlib.sha256(ad['url'].encode('utf-8')).hexdigest()
@@ -71,38 +65,31 @@ class Monitor:
                         hash_value = line.strip()
                         if hash_value:
                             seen.add(hash_value)
-                self.log_callback(
-                    f"📂 Carregados {len(seen)} anúncios vistos anteriormente")
+                self.logger.info(f"📂 Carregados {len(seen)} anúncios vistos anteriormente")
             except Exception as e:
-                self.log_callback(
-                    f"❌ Erro ao carregar anúncios vistos: {str(e)}")
+                self.logger.error(f"❌ Erro ao carregar anúncios vistos: {str(e)}")
         return seen
 
     def _save_ad_hash(self, ad_hash):
         """Salva hash no arquivo com verificação de duplicata"""
         try:
-            # Verifica se o hash já existe no arquivo antes de salvar
             if os.path.exists(self.hash_file):
                 with open(self.hash_file, 'r', encoding='utf-8') as f:
                     existing_hashes = {line.strip() for line in f if line.strip()}
                 if ad_hash in existing_hashes:
-                    self.log_callback(f"🔄 Hash {ad_hash[:8]}...{ad_hash[-8:]} já existe no arquivo - não salvando novamente")
+                    self.logger.info(f"🔄 Hash {ad_hash[:8]}...{ad_hash[-8:]} já existe no arquivo - não salvando novamente")
                     return
             
             with open(self.hash_file, 'a', encoding='utf-8') as f:
                 f.write(f"{ad_hash}\n")
         except Exception as e:
-            self.log_callback(f"❌ Erro ao salvar hash de anúncio: {str(e)}")
+            self.logger.error(f"❌ Erro ao salvar hash de anúncio: {str(e)}")
 
     def _generate_keyword_subsets(self):
-        """
-        Generates all possible keyword subsets (combinations) based on min/max_subset_size.
-        This method is only called if self.allow_subset is True.
-        Additionally, it always includes the complete keyword list.
-        """
+        """Generates all possible keyword subsets based on min/max_subset_size."""
         all_subsets = []
         if self.min_subset_size is None or self.max_subset_size is None:
-            self.log_callback("⚠️ min_subset_size ou max_subset_size não definidos corretamente. Gerando apenas o conjunto completo de palavras-chave.")
+            self.logger.warning("⚠️ min_subset_size ou max_subset_size não definidos corretamente. Gerando apenas o conjunto completo de palavras-chave.")
             return [tuple(self.keywords)]
             
         for i in range(self.min_subset_size, self.max_subset_size + 1):
@@ -128,28 +115,26 @@ class Monitor:
         current_hour = current_time_gmt3.hour
         current_time_str = current_time_gmt3.strftime("%H:%M:%S")
         
-        self.log_callback(f"😴 Fora do horário de funcionamento - {current_time_str} (GMT-3)")
-        self.log_callback("⏰ Próxima verificação será às 06:00")
+        self.logger.info(f"😴 Fora do horário de funcionamento - {current_time_str} (GMT-3)")
+        self.logger.info("⏰ Próxima verificação será às 06:00")
 
         if current_hour >= 23:
-            next_6am = current_time_gmt3.replace(
-                hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            next_6am = current_time_gmt3.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
         else:
-            next_6am = current_time_gmt3.replace(
-                hour=6, minute=0, second=0, microsecond=0)
+            next_6am = current_time_gmt3.replace(hour=6, minute=0, second=0, microsecond=0)
 
         seconds_until_6am = int((next_6am - current_time_gmt3).total_seconds())
 
         for i in range(0, seconds_until_6am, 10):
             if self.stop_event.is_set():
                 self.running = False
-                self.log_callback("🛑 Loop interrompido durante espera fora do horário por stop_event")
+                self.logger.info("🛑 Loop interrompido durante espera fora do horário por stop_event")
                 return False
             
             remaining = seconds_until_6am - i
             hours_remaining = remaining // 3600
             minutes_remaining = (remaining % 3600) // 60
-            self.log_callback(f"💤 Aguardando horário de funcionamento - {hours_remaining:02d}:{minutes_remaining:02d} restantes")
+            self.logger.info(f"💤 Aguardando horário de funcionamento - {hours_remaining:02d}:{minutes_remaining:02d} restantes")
             self.stop_event.wait(timeout=10)
         
         return True
@@ -161,29 +146,29 @@ class Monitor:
         if self.allow_subset:
             all_keyword_subsets = self._generate_keyword_subsets()
             if not all_keyword_subsets:
-                self.log_callback("⚠️ Nenhuma combinação de subconjunto gerada com as configurações atuais. Usando palavras-chave originais como fallback.")
+                self.logger.warning("⚠️ Nenhuma combinação de subconjunto gerada com as configurações atuais. Usando palavras-chave originais como fallback.")
                 selected_keyword_sets = [tuple(self.keywords)]
             else:
                 num_sets_to_use = min(self.number_set, len(all_keyword_subsets))
                 selected_keyword_sets = random.sample(all_keyword_subsets, num_sets_to_use)
-                self.log_callback(f"🎲 Selecionados {num_sets_to_use} subconjuntos de palavras-chave para esta verificação.")
+                self.logger.info(f"🎲 Selecionados {num_sets_to_use} subconjuntos de palavras-chave para esta verificação.")
         
         return selected_keyword_sets
 
     def _scrape_page(self, page_num, current_keywords, set_idx, total_sets):
         """Raspa uma página específica com tentativas de retry"""
-        self.log_callback(f"📚 Tentando raspar página {page_num}/{self.page_depth} para o conjunto de palavras chave atual..., conjunto: {set_idx + 1}/{total_sets}.")
+        self.logger.info(f"📚 Tentando raspar página {page_num}/{self.page_depth} para o conjunto de palavras chave atual..., conjunto: {set_idx + 1}/{total_sets}.")
         
         page_attempt = 0
         while page_attempt < self.retry_attempts:
             if self.stop_event.is_set():
                 self.running = False
-                self.log_callback("🛑 Monitoramento interrompido durante raspagem de página por stop_event.")
+                self.logger.info("🛑 Monitoramento interrompido durante raspagem de página por stop_event.")
                 return None
             
             page_attempt += 1
             try:
-                self.log_callback(f"🪜 Inicio processo monitor de scrape da página {page_num} (Tentativa {page_attempt}/{self.retry_attempts})")
+                self.logger.info(f"🪜 Inicio processo monitor de scrape da página {page_num} (Tentativa {page_attempt}/{self.retry_attempts})")
 
                 new_ads_from_page = self.scraper.scrape_err(
                     query_keywords=current_keywords,
@@ -197,20 +182,20 @@ class Monitor:
                     page_retry_delay_max=self.max_repeat_time
                 )
 
-                self.log_callback(f"🏆 Página {page_num} raspada com sucesso para o conjunto {set_idx + 1}. Encontrados {len(new_ads_from_page)} anúncios.")
+                self.logger.info(f"🏆 Página {page_num} raspada com sucesso para o conjunto {set_idx + 1}. Encontrados {len(new_ads_from_page)} anúncios.")
                 return new_ads_from_page
 
             except Exception as e:
-                self.log_callback(f"❌ Erro na raspagem da página {page_num} (Conjunto {set_idx + 1}, Tentativa {page_attempt}/{self.retry_attempts}): {type(e).__name__} - {str(e)}")
+                self.logger.error(f"❌ Erro na raspagem da página {page_num} (Conjunto {set_idx + 1}, Tentativa {page_attempt}/{self.retry_attempts}): {type(e).__name__} - {str(e)}")
                 
                 if page_attempt < self.retry_attempts:
                     retry_delay = random.uniform(5, 15)
                     if self.stop_event.wait(timeout=retry_delay):
                         self.running = False
-                        self.log_callback("🛑 Monitoramento interrompido durante espera de retry por stop_event.")
+                        self.logger.info("🛑 Monitoramento interrompido durante espera de retry por stop_event.")
                         return None
                 else:
-                    self.log_callback(f"⚠️ Todas as {self.retry_attempts} tentativas falharam para a página {page_num} do conjunto {set_idx + 1}. Prosseguindo para a próxima página/conjunto.")
+                    self.logger.warning(f"⚠️ Todas as {self.retry_attempts} tentativas falharam para a página {page_num} do conjunto {set_idx + 1}. Prosseguindo para a próxima página/conjunto.")
                     return None
         
         return None
@@ -218,7 +203,7 @@ class Monitor:
     def _scrape_keyword_set(self, current_keywords_tuple, set_idx, total_sets):
         """Raspa todas as páginas para um conjunto específico de palavras-chave"""
         current_keywords = list(current_keywords_tuple)
-        self.log_callback(f"🦭 Processando conjunto de palavras-chave {set_idx + 1}/{total_sets}: {', '.join(current_keywords)}")
+        self.logger.info(f"🦭 Processando conjunto de palavras-chave {set_idx + 1}/{total_sets}: {', '.join(current_keywords)}")
         
         ads_from_set = []
         
@@ -226,7 +211,7 @@ class Monitor:
             new_ads_from_page = self._scrape_page(page_num, current_keywords, set_idx, total_sets)
             
             if new_ads_from_page is None:
-                self.log_callback(f"⏭️ Pulando para o próximo conjunto devido a falha persistente na página {page_num}.")
+                self.logger.info(f"⏭️ Pulando para o próximo conjunto devido a falha persistente na página {page_num}.")
                 break
             
             ads_from_set.extend(new_ads_from_page)
@@ -241,18 +226,15 @@ class Monitor:
         hash_ad_tuples = [(self._hash_ad(ad), ad) for ad in all_ads]
         truly_new_ads = []
         truly_new_ads_hash_list = []
-        seen_in_this_cycle = set()  # Novo set para evitar duplicatas dentro do ciclo atual
+        seen_in_this_cycle = set()
         
         for ad_hash, ad in hash_ad_tuples:
-            # Verifica se o anúncio já foi visto anteriormente (arquivo/memória)
             if ad_hash in self.seen_ads:
                 continue
-            # Verifica se o mesmo anúncio (baseado no hash) já está sendo considerado neste ciclo
             if ad_hash in seen_in_this_cycle:
-                self.log_callback(f"🔄 Hash duplicado encontrado no mesmo ciclo: {ad_hash[:8]}...{ad_hash[-8:]} - Ignorando")
+                self.logger.info(f"🔄 Hash duplicado encontrado no mesmo ciclo: {ad_hash[:8]}...{ad_hash[-8:]} - Ignorando")
                 continue
             
-            # Se o anúncio é novo, adiciona-o à lista e marca como visto neste ciclo
             seen_in_this_cycle.add(ad_hash)
             truly_new_ads_hash_list.append(ad_hash)
             truly_new_ads.append(ad)
@@ -262,16 +244,14 @@ class Monitor:
     def _send_new_ads_to_telegram(self, truly_new_ads, truly_new_ads_hash):
         """Envia anúncios novos para o Telegram e salva os hashes"""
         if not truly_new_ads:
-            self.log_callback("ℹ️ Nenhum anúncio novo encontrado neste ciclo.")
+            self.logger.info("ℹ️ Nenhum anúncio novo encontrado neste ciclo.")
             return
         
-        self.log_callback(f"🍻 Encontrou {len(truly_new_ads)} anúncios ainda não vistos neste ciclo!")
+        self.logger.info(f"🍻 Encontrou {len(truly_new_ads)} anúncios ainda não vistos neste ciclo!")
         
-        # Verificação adicional de segurança antes de enviar
         unique_hashes = set(truly_new_ads_hash)
         if len(unique_hashes) != len(truly_new_ads_hash):
-            self.log_callback(f"⚠️ AVISO: Detectadas {len(truly_new_ads_hash) - len(unique_hashes)} duplicatas nos hashes antes do envio!")
-            # Remove duplicatas preservando ordem
+            self.logger.warning(f"⚠️ AVISO: Detectadas {len(truly_new_ads_hash) - len(unique_hashes)} duplicatas nos hashes antes do envio!")
             seen_hashes = set()
             filtered_ads = []
             filtered_hashes = []
@@ -282,21 +262,19 @@ class Monitor:
                     filtered_hashes.append(ad_hash)
             truly_new_ads = filtered_ads
             truly_new_ads_hash = filtered_hashes
-            self.log_callback(f"🔧 Após filtrar duplicatas: {len(truly_new_ads)} anúncios únicos")
+            self.logger.info(f"🔧 Após filtrar duplicatas: {len(truly_new_ads)} anúncios únicos")
         
-        # Formatação com hash incluído
         formatted_ads = []
         for i, ad in enumerate(truly_new_ads):
             ad_hash = truly_new_ads_hash[i]
-            # Verifica novamente se este hash já foi processado (extra segurança)
             if ad_hash in self.seen_ads:
-                self.log_callback(f"🚫 Hash {ad_hash[:8]}...{ad_hash[-8:]} já foi visto - pulando envio")
+                self.logger.info(f"🚫 Hash {ad_hash[:8]}...{ad_hash[-8:]} já foi visto - pulando envio")
                 continue
             formatted_ad = f"Título: {ad['title']}\nURL: {ad['url']}\nHash: {ad_hash[:8]}...{ad_hash[-8:]}"
             formatted_ads.append(formatted_ad)
         
         if not formatted_ads:
-            self.log_callback("ℹ️ Nenhum anúncio válido restou após verificações de duplicata.")
+            self.logger.info("ℹ️ Nenhum anúncio válido restou após verificações de duplicata.")
             return
         
         try:
@@ -305,44 +283,43 @@ class Monitor:
             
             for msg_idx, msg in enumerate(messages):
                 if not self.running:
-                    self.log_callback("🛑 Monitoramento interrompido antes de enviar todas as mensagens.")
+                    self.logger.info("🛑 Monitoramento interrompido antes de enviar todas as mensagens.")
                     break
                 
                 try:
                     self.telegram_bot.send_message(self.chat_id, msg)
                     successfully_sent_count += len(formatted_ads[msg_idx * self.batch_size:(msg_idx + 1) * self.batch_size])
-                    self.log_callback(f"📤 Mensagem {msg_idx + 1}/{len(messages)} enviada com sucesso")
+                    self.logger.info(f"📤 Mensagem {msg_idx + 1}/{len(messages)} enviada com sucesso")
                 except Exception as send_error:
-                    self.log_callback(f"❌ Erro ao enviar mensagem {msg_idx + 1}/{len(messages)}: {str(send_error)}")
+                    self.logger.error(f"❌ Erro ao enviar mensagem {msg_idx + 1}/{len(messages)}: {str(send_error)}")
                     continue
                 
                 if self.stop_event.wait(timeout=1):
                     self.running = False
-                    self.log_callback("🛑 Monitoramento interrompido durante o envio de mensagens.")
+                    self.logger.info("🛑 Monitoramento interrompido durante o envio de mensagens.")
                     break
             
             if self.running and successfully_sent_count > 0:
-                # Adicionar apenas os hashes dos anúncios que foram efetivamente enviados
                 hashes_to_save = truly_new_ads_hash[:successfully_sent_count]
                 for ad_hash in hashes_to_save:
-                    if ad_hash not in self.seen_ads:  # Verificação final antes de salvar
-                        self.seen_ads.add(ad_hash)  # Adiciona ao set em memória
-                        self._save_ad_hash(ad_hash)  # Salva no arquivo
-                self.log_callback(f"📩 Enviados {successfully_sent_count} novos anúncios para Telegram e salvos {len(hashes_to_save)} hashes")
+                    if ad_hash not in self.seen_ads:
+                        self.seen_ads.add(ad_hash)
+                        self._save_ad_hash(ad_hash)
+                self.logger.info(f"📩 Enviados {successfully_sent_count} novos anúncios para Telegram e salvos {len(hashes_to_save)} hashes")
                 
         except Exception as e:
-            self.log_callback(f"❌ Erro geral ao enviar mensagens para Telegram: {str(e)}")
+            self.logger.error(f"❌ Erro geral ao enviar mensagens para Telegram: {str(e)}")
 
     def _wait_for_next_cycle(self):
         """Aguarda o intervalo antes do próximo ciclo de monitoramento"""
         wait_time_minutes = self.monitoring_interval
-        self.log_callback(f"⏳ Aguardando próximo ciclo ({wait_time_minutes} minutos)...")
+        self.logger.info(f"⏳ Aguardando próximo ciclo ({wait_time_minutes} minutos)...")
         seconds_to_wait = wait_time_minutes * 60
 
         for i in range(0, seconds_to_wait, 10):
             if self.stop_event.is_set():
                 self.running = False
-                self.log_callback("🛑 Monitoramento interrompido durante espera do ciclo por stop_event.")
+                self.logger.info("🛑 Monitoramento interrompido durante espera do ciclo por stop_event.")
                 return False
             self.stop_event.wait(timeout=10)
         
@@ -353,22 +330,18 @@ class Monitor:
         cycle_start_time = time.time()
         
         try:
-            # Verificar horário de funcionamento
             within_hours, current_time_gmt3 = self._is_within_operating_hours()
             
-            self.log_callback(f"🔄 Estado do loop: running={self.running}, hora atual={current_time_gmt3.strftime('%H:%M:%S')}")
+            self.logger.info(f"🔄 Estado do loop: running={self.running}, hora atual={current_time_gmt3.strftime('%H:%M:%S')}")
             
             if not within_hours:
                 return self._wait_for_operating_hours(current_time_gmt3)
             
-            # Log do início do ciclo
             current_time = current_time_gmt3.strftime("%H:%M:%S")
-            self.log_callback(f"👓 Verificação #{cycle_count} - {current_time} (GMT-3)")
+            self.logger.info(f"👓 Verificação #{cycle_count} - {current_time} (GMT-3)")
             
-            # Selecionar conjuntos de palavras-chave
             selected_keyword_sets = self._select_keyword_sets()
             
-            # Raspar anúncios para todos os conjuntos de palavras-chave
             current_cycle_new_ads = []
             for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
                 ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
@@ -380,42 +353,37 @@ class Monitor:
             if not self.running:
                 return False
             
-            # Processar anúncios novos
             truly_new_ads, truly_new_ads_hash = self._process_new_ads(current_cycle_new_ads)
             
-            # Enviar para Telegram
             self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
             
         except Exception as e:
-            self.log_callback(f"❌ Erro geral durante verificação de ciclo: {str(e)}")
+            self.logger.error(f"❌ Erro geral durante verificação de ciclo: {str(e)}")
         
-        # Log do fim do ciclo
         cycle_end_time = time.time()
         cycle_duration = cycle_end_time - cycle_start_time
-        self.log_callback(f"⏱️ Ciclo de verificação concluído em {cycle_duration:.1f} segundos.")
+        self.logger.info(f"⏱️ Ciclo de verificação concluído em {cycle_duration:.1f} segundos.")
         
         return True
 
     def start(self):
-        """Função principal do monitoramento - agora muito mais limpa!"""
+        """Função principal do monitoramento"""
         self.running = True
         self.stop_event.clear()
-        self.log_callback("🦉 Monitoramento iniciado!")
+        self.logger.info("🦉 Monitoramento iniciado!")
 
         cycle_count = 0
 
         while self.running:
             cycle_count += 1
             
-            # Executa um ciclo completo de monitoramento
             if not self._run_monitoring_cycle(cycle_count):
                 break
             
-            # Aguarda o próximo ciclo
             if not self._wait_for_next_cycle():
                 break
 
-        self.log_callback("Monitoramento finalizado.")
+        self.logger.info("Monitoramento finalizado.")
 
     def _split_message(self, ads):
         messages = []
@@ -433,4 +401,4 @@ class Monitor:
     def stop(self):
         self.running = False
         self.stop_event.set()
-        self.log_callback("🛑 Comando de parada enviado...")
+        self.logger.info("🛑 Comando de parada enviado...")

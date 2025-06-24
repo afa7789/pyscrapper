@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# export TEST_MODE=1
+# python3 small_test_scraper.py
 
 """
 Exemplo de uso do MarketRoxoScraper2 com bypass Cloudflare
@@ -27,9 +27,9 @@ def main():
     # Configuração do proxy (opcional)
     http_proxy = os.getenv("HTTP_PROXY", "")
     https_proxy = os.getenv("HTTPS_PROXY", "")
-    # proxy_config = http_proxy or https_proxy or ""
+    proxy_config = http_proxy or https_proxy or ""
 
-    proxy_config = ""
+    # proxy_config = ""
 
     # Palavras-chave para buscar (também usadas como query_keywords para a URL)
     keywords_str = "iphone,ipad,apple"
@@ -55,7 +55,7 @@ def main():
 
     # Inicializa o scraper
     scraper = MarketRoxoScraperCloudflare(
-        log_callback=log_callback,
+        # log_callback=log_callback,
         base_url=base_url,
         proxies=proxy_config
     )

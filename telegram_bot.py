@@ -1,10 +1,11 @@
 import requests
+from logging_config import get_logger
 
 class TelegramBot:
-    def __init__(self, log_callback, token):
+    def __init__(self, token):
         self.token = token
-        self.log_callback = log_callback
-        self.MAX_MESSAGE_LENGTH = 4096 # Telegram's character limit
+        self.logger = get_logger()
+        self.MAX_MESSAGE_LENGTH = 4096  # Telegram's character limit
 
     def send_message(self, identifier, text):
         """Sends message to a chat ID, phone number, or username (if valid).
@@ -33,7 +34,7 @@ class TelegramBot:
                         break
 
             if not chat_id:
-                self.log_callback(
+                self.logger.error(
                     "Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
                 raise ValueError(
                     "Identificador não encontrado. O usuário deve iniciar uma conversa com o bot primeiro.")
@@ -47,13 +48,10 @@ class TelegramBot:
             response = requests.post(url, params=params)
 
             if response.status_code != 200:
-                self.log_callback(f"Erro ao enviar mensagem: {response.text}")
-                # You might want to handle this error more gracefully,
-                # e.g., by retrying or logging and continuing to the next chunk.
+                self.logger.error(f"Erro ao enviar mensagem: {response.text}")
                 raise Exception(f"Erro ao enviar mensagem: {response.text}")
             else:
-                self.log_callback(f"Mensagem enviada com sucesso: {chunk[:18]}...") # Log a snippet
-
+                self.logger.info(f"Mensagem enviada com sucesso: {chunk[:18]}...")
 
     def list_interacted_users(self):
         """Lists all users who have interacted with the bot."""
@@ -61,8 +59,7 @@ class TelegramBot:
         try:
             response = requests.get(url)
             if response.status_code != 200:
-                self.log_callback(
-                    f"Erro ao obter atualizações: {response.text}")
+                self.logger.error(f"Erro ao obter atualizações: {response.text}")
                 raise Exception(f"Erro ao obter atualizações: {response.text}")
 
             updates = response.json().get("result", [])
@@ -87,11 +84,10 @@ class TelegramBot:
 
             user_list = list(users.values())
             if not user_list:
-                self.log_callback(
-                    "Nenhum usuário encontrou interação com o bot.")
+                self.logger.info("Nenhum usuário encontrou interação com o bot.")
 
             return user_list
 
         except Exception as e:
-            self.log_callback(f"Erro ao listar usuários: {str(e)}")
+            self.logger.error(f"Erro ao listar usuários: {str(e)}")
             raise Exception(f"Erro ao listar usuários: {str(e)}")

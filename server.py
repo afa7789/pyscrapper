@@ -1,7 +1,5 @@
-from flask import Flask, Response, request, render_template
+from flask import Flask, Response, request, render_template, send_file, jsonify
 from functools import wraps
-import logging
-from logging.handlers import TimedRotatingFileHandler
 import os
 from dotenv import load_dotenv
 import json
@@ -9,188 +7,53 @@ from threading import Thread
 from monitor import Monitor
 from scraper_cloudflare import MarketRoxoScraperCloudflare
 from telegram_bot import TelegramBot
-from flask import send_file
-from datetime import datetime, timezone, timedelta
-from flask import jsonify, send_from_directory, abort
 import zipfile
 import io
+from datetime import datetime, timezone, timedelta
+from logging_config import get_logger, setup_logging
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 app = Flask(__name__, template_folder='template')
-
-# --- Configuração de Logging com Rotação Diária e Fuso Horário GMT-3 ---
-LOGS_DIR = 'logs'
-os.makedirs(LOGS_DIR, exist_ok=True)
-
-log_file_base = 'app'
-log_file_path = os.path.join(LOGS_DIR, f'{log_file_base}.log')
-
-# Classe customizada para formatar logs com GMT-3
-class GMT3Formatter(logging.Formatter):
-    def formatTime(self, record, datefmt=None):
-        gmt_minus_3 = timezone(timedelta(hours=-3))
-        dt = datetime.fromtimestamp(record.created, tz=gmt_minus_3)
-        if datefmt:
-            return dt.strftime(datefmt)
-        else:
-            return dt.strftime('%Y-%m-%d %H:%M:%S')
-
-# Classe customizada do TimedRotatingFileHandler para rotação com data e hora
-class ForceRotatingFileHandler(TimedRotatingFileHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.namer = self.custom_namer  # Define o método de nomeação personalizado
-
-    def custom_namer(self, default_name):
-        """
-        Personaliza o nome do arquivo rotacionado para incluir data e hora.
-        Exemplo: app.log -> app.log.2025-06-24_13-01-37
-        """
-        gmt_minus_3 = timezone(timedelta(hours=-3))
-        now = datetime.now(gmt_minus_3)
-        suffix = now.strftime("%Y-%m-%d_%H-%M-%S")
-        base, ext = os.path.splitext(default_name)
-        return f"{base}.{suffix}{ext}"
-
-    def doRollover(self):
-        """
-        Executa a rotação do log, garantindo que o arquivo atual seja truncado.
-        """
-        try:
-            if self.stream:
-                self.stream.close()
-                self.stream = None
-
-            # Executa a rotação padrão
-            super().doRollover()
-
-            # Garante que o arquivo atual seja truncado/recriado
-            try:
-                with open(self.baseFilename, 'w', encoding='utf-8'):
-                    pass  # Trunca o arquivo
-            except Exception as e:
-                print(f"Erro ao truncar arquivo de log {self.baseFilename}: {e}")
-
-        except Exception as e:
-            print(f"Erro na rotação padrão: {e}. Tentando rotação forçada...")
-            try:
-                self.force_rotation()
-            except Exception as e2:
-                print(f"Erro na rotação forçada: {e2}")
-
-    def force_rotation(self):
-        """
-        Força a rotação do log manualmente, incluindo data e hora no nome.
-        """
-        if self.stream:
-            self.stream.close()
-            self.stream = None
-
-        gmt_minus_3 = timezone(timedelta(hours=-3))
-        now = datetime.now(gmt_minus_3)
-        suffix = now.strftime("%Y-%m-%d_%H-%M-%S")
-        base_filename = self.baseFilename
-        rotated_filename = f"{base_filename}.{suffix}"
-
-        try:
-            if os.path.exists(base_filename):
-                os.rename(base_filename, rotated_filename)
-            # Cria um novo arquivo vazio
-            with open(base_filename, 'w', encoding='utf-8'):
-                pass
-        except OSError as e:
-            print(f"Erro ao forçar rotação do log: {e}")
-        finally:
-            self.stream = self._open()
-
-file_handler = ForceRotatingFileHandler(
-    log_file_path,
-    when='midnight',
-    interval=1,
-    backupCount=7,
-    encoding='utf-8'
-)
-
-gmt3_formatter = GMT3Formatter(
-    '%(asctime)s - %(levelname).1s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-file_handler.setFormatter(gmt3_formatter)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(file_handler)
 
 # Carrega variáveis de ambiente
 load_dotenv()
 
-# --- GERENCIAMENTO DO config.json ---
+# --- Configurações ---
 CONFIG_FILE_PATH = 'config.json'
-
+LOGS_DIR = 'logs'
 
 def load_dynamic_config():
-    """
-    Tenta carregar as configurações dinâmicas do config.json.
-    Retorna dicionário vazio se o arquivo não existir ou for inválido.
-    """
     try:
         if os.path.exists(CONFIG_FILE_PATH):
             with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        return {}  # Retorna vazio se o arquivo não existe
-    except json.JSONDecodeError as e:
-        logger.error(
-            f"Erro ao decodificar JSON do arquivo '{CONFIG_FILE_PATH}': {e}. Retornando configuração vazia.")
-        return {}  # Retorna vazio se o JSON for inválido
+        return {}
     except Exception as e:
-        logger.error(f"Erro inesperado ao carregar {CONFIG_FILE_PATH}: {e}")
+        get_logger().error(f"Erro ao carregar config.json: {e}")
         return {}
 
-def save_dynamic_config(data_to_save):
-    """
-    Salva as configurações dinâmicas no config.json.
-    Sobrescreve o conteúdo existente com os novos dados.
-    """
+def save_dynamic_config(data):
     try:
         with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2)
-        logger.info(f"Configurações dinâmicas salvas em '{CONFIG_FILE_PATH}'.")
-    except IOError as e:
-        logger.error(
-            f"Erro ao salvar configurações dinâmicas em '{CONFIG_FILE_PATH}': {e}")
+            json.dump(data, f, indent=2)
+        get_logger().info("Configurações salvas em config.json")
     except Exception as e:
-        logger.error(f"Erro inesperado ao salvar config.json: {e}")
+        get_logger().error(f"Erro ao salvar config.json: {e}")
 
-# --- Variáveis Globais (Lidas na Inicialização) ---
-# Estas variáveis têm a seguinte prioridade:
-# 1. config.json (se existir e tiver a chave)
-# 2. .env (via os.getenv)
-# 3. Valor padrão hardcoded no código
-
-
-# Carrega configurações dinâmicas uma vez na inicialização para variáveis globais
-initial_dynamic_config = load_dynamic_config()
-
-TELEGRAM_TOKEN = initial_dynamic_config.get(
-    "token", os.getenv("TELEGRAM_TOKEN", ""))
-CHAT_INPUT = initial_dynamic_config.get(
-    "chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
-DEFAULT_KEYWORDS = initial_dynamic_config.get(
-    "keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
-NEGATIVE_KEYWORDS = initial_dynamic_config.get(
-    "negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
+# Configurações globais
+initial_config = load_dynamic_config()
+TELEGRAM_TOKEN = initial_config.get("token", os.getenv("TELEGRAM_TOKEN", ""))
+CHAT_INPUT = initial_config.get("chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
+DEFAULT_KEYWORDS = initial_config.get("keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
+NEGATIVE_KEYWORDS = initial_config.get("negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
 
 BASE_URL = os.getenv("MAIN_URL_SCRAPE_ROXO", "")
 if not BASE_URL:
-    logger.error(
-        "Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
-    raise ValueError(
-        "Variável de ambiente MAIN_URL_SCRAPE_ROXO não está definida ou está vazia.")
+    raise ValueError("MAIN_URL_SCRAPE_ROXO não definida")
 
-# Credenciais para Basic Auth (sempre do .env ou padrão)
 USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 PASSWORD = os.getenv("ADMIN_PASSWORD", "password123")
 
-# Variáveis da Empresa (sempre do .env ou padrão)
 COMPANY_TITLE = os.getenv("COMPANY_TITLE", "")
 COMPANY_SLOGAN = os.getenv("COMPANY_SLOGAN", "")
 COMPANY_DESCRIPTION = os.getenv("COMPANY_DESCRIPTION", "")
@@ -206,48 +69,36 @@ PROXIES = {
     "https": os.getenv("HTTPS_PROXY", "")
 }
 
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Instância global do Monitor
+# Variáveis do monitor
 monitor = None
 monitor_thread = None
 
-
 def save_monitor_status(status):
-    """Salva o status de execução do monitor em um arquivo."""
     try:
         with open('monitor_status.json', 'w', encoding='utf-8') as f:
             json.dump({'is_running': status}, f)
     except Exception as e:
-        logger.error(f"Erro ao salvar estado do monitor: {str(e)}")
-
+        get_logger().error(f"Erro ao salvar status do monitor: {e}")
 
 def load_monitor_status():
-    """Carrega o status de execução do monitor de um arquivo."""
     try:
         if os.path.exists('monitor_status.json'):
             with open('monitor_status.json', 'r', encoding='utf-8') as f:
                 return json.load(f).get('is_running', False)
         return False
     except Exception as e:
-        logger.error(f"Erro ao carregar estado do monitor: {str(e)}")
+        get_logger().error(f"Erro ao carregar status do monitor: {e}")
         return False
 
-# --- Lógica de Auth (sem mudanças) ---
-
+# --- Autenticação ---
 def check_auth(username, password):
     return username == USERNAME and password == PASSWORD
-
 
 def authenticate():
     return Response(
         'Autenticação necessária.', 401,
         {'WWW-Authenticate': 'Basic realm="Login Required"'}
     )
-
 
 def requires_auth(f):
     @wraps(f)
@@ -258,21 +109,13 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- Rotas Flask ---
-@app.route('/download-hash-file', methods=['GET'])
-@requires_auth
-def download_hash_file():
-    data_dir = os.path.join(os.path.expanduser("~"), ".marketroxo_data")
-    os.makedirs(data_dir, exist_ok=True)
-    hash_file_path = os.path.join(data_dir, "seen_ads.txt")
+# Função para ser chamada após o fork de cada worker no Gunicorn
+def post_fork(server, worker):
+    """Configura o logging em cada worker após o fork"""
+    setup_logging()
+    get_logger().info(f"Worker {worker.pid} inicializado com logging configurado")
 
-    if not os.path.exists(hash_file_path):
-        logger.info(f"Hash file not found at: {hash_file_path}")
-        return {"message": "Hash file not found."}, 404
-
-    return send_file(hash_file_path, as_attachment=True)
-
-
+# --- Rotas ---
 @app.route('/')
 def home():
     return render_template(
@@ -288,266 +131,208 @@ def home():
         website=WEBSITE
     )
 
-
 @app.route('/admin')
 @requires_auth
 def admin():
-    # Sempre recarrega as configurações dinâmicas do config.json para ter os valores mais recentes
-    current_dynamic_config = load_dynamic_config()
-
-    # As variáveis para o template seguem a prioridade: config.json > .env > padrão
-    keywords_list_val = current_dynamic_config.get(
-        "keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
-    negative_keywords_list_val = current_dynamic_config.get(
-        "negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
-    token_val = current_dynamic_config.get(
-        "token", os.getenv("TELEGRAM_TOKEN", ""))
-    chat_input_val = current_dynamic_config.get(
-        "chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
-    page_depth_val = current_dynamic_config.get("page_depth", 3)
-    retry_attempts_val = current_dynamic_config.get("retry_attempts", 100)
-    min_repeat_time_val = current_dynamic_config.get("min_repeat_time", 15)
-    interval_monitor_val = current_dynamic_config.get("interval_monitor", 30) 
-    max_repeat_time_val = current_dynamic_config.get("max_repeat_time", 67)
-    allow_subset_val = current_dynamic_config.get("allow_subset", False)
-    batch_size_val = current_dynamic_config.get("batch_size", 1)
-    number_set_val = current_dynamic_config.get("number_set", 4)
-
+    current_config = load_dynamic_config()
+    
     return render_template(
         'admin.html',
-        keywords_list=keywords_list_val,
-        negative_keywords_list=negative_keywords_list_val,
-        token=token_val,
-        chat_input=chat_input_val,
-        interval_monitor=interval_monitor_val,
-        page_depth=page_depth_val,
-        retry_attempts=retry_attempts_val,
-        min_repeat_time=min_repeat_time_val,
-        max_repeat_time=max_repeat_time_val,
-        allow_keyword_subsets=allow_subset_val,
-        batch_size=batch_size_val,
-        number_set=number_set_val,
+        keywords_list=current_config.get("keywords", DEFAULT_KEYWORDS),
+        negative_keywords_list=current_config.get("negative_keywords_list", NEGATIVE_KEYWORDS),
+        token=current_config.get("token", TELEGRAM_TOKEN),
+        chat_input=current_config.get("chat_input", CHAT_INPUT),
+        interval_monitor=current_config.get("interval_monitor", 30),
+        page_depth=current_config.get("page_depth", 3),
+        retry_attempts=current_config.get("retry_attempts", 100),
+        min_repeat_time=current_config.get("min_repeat_time", 15),
+        max_repeat_time=current_config.get("max_repeat_time", 67),
+        allow_keyword_subsets=current_config.get("allow_subset", False),
+        batch_size=current_config.get("batch_size", 1),
+        number_set=current_config.get("number_set", 4),
         username=USERNAME,
         password=PASSWORD
     )
-
 
 @app.route('/start', methods=['POST'])
 @requires_auth
 def start():
     global monitor, monitor_thread
+    
+    if monitor and monitor_thread and monitor_thread.is_alive():
+        return {"message": "Monitoramento já está ativo!"}, 400
+    
+    if load_monitor_status():
+        save_monitor_status(False)
+    
     try:
-        # Verifica se um monitor JÁ ESTÁ ATIVO NESTE PROCESSO
-        # E também verifica o status persistido para evitar iniciar duas vezes
-        if monitor and monitor_thread and monitor_thread.is_alive():
-            logger.info(
-                "Monitoramento já está ativo (verificado por variável global)")
-            return {"message": "Monitoramento já está ativo!, caso tenha encerrado espere 10 segundos e tente novamente."}, 400
-
-        if load_monitor_status():  # Verifica o status persistido
-            logger.info(
-                "Monitoramento já está ativo (verificado por monitor_status.json)")
-            # Tenta parar o monitor persistido se ele não estiver rodando neste processo.
-            # Isso pode acontecer se o app foi reiniciado e o status_json ficou 'true'.
-            # Mas idealmente, para um server.py único, 'monitor' e 'monitor_thread' devem ser None
-            # se não houver um monitor ativo neste processo.
-            # Se load_monitor_status() é true mas monitor é None, é um estado "sujo".
-            # Vamos forçar a parada para limpar.
-            logger.warning(
-                "monitor_status.json indica ativo, mas variáveis globais são None. Forçando reset.")
-            # Reseta o status para permitir um novo início.
-            save_monitor_status(False)
-            # A requisição continuará para iniciar o monitor agora.
-
-        logger.info("Iniciando novo monitoramento...")
         data = request.get_json()
-
-        keywords_list_str = data.get('keywords_list', DEFAULT_KEYWORDS)
-        negative_keywords_list_str = data.get(
-            'negative_keywords_list', NEGATIVE_KEYWORDS)
-        token = data.get('token', TELEGRAM_TOKEN)
-        chat_input = data.get('chat_input', CHAT_INPUT)
-        page_depth = int(data.get('page_depth', 3))
-        retry_attempts = int(data.get('retry_attempts', 100))
-        min_repeat_time = int(data.get('min_repeat_time', 15))
-        max_repeat_time = int(data.get('max_repeat_time', 67))
-        allow_subset = data.get('allow_subset', False)
-        interval_monitor = int(data.get('interval_monitor', 30))
-        batch_size = int(data.get('batch_size', 1))
-        number_set = int(data.get('number_set', 4))
-
-        data_to_save = {
-            "keywords": keywords_list_str,
-            "negative_keywords_list": negative_keywords_list_str,
-            "token": token,
-            "chat_input": chat_input,
-            "interval_monitor": interval_monitor, 
-            "batch_size": batch_size, 
-            "page_depth": page_depth,
-            "number_set": number_set,
-            "retry_attempts": retry_attempts,
-            "min_repeat_time": min_repeat_time,
-            "max_repeat_time": max_repeat_time,
-            "allow_subset": allow_subset
+        
+        config = {
+            "keywords": data.get('keywords_list', DEFAULT_KEYWORDS),
+            "negative_keywords_list": data.get('negative_keywords_list', NEGATIVE_KEYWORDS),
+            "token": data.get('token', TELEGRAM_TOKEN),
+            "chat_input": data.get('chat_input', CHAT_INPUT),
+            "interval_monitor": int(data.get('interval_monitor', 30)),
+            "page_depth": int(data.get('page_depth', 3)),
+            "retry_attempts": int(data.get('retry_attempts', 100)),
+            "min_repeat_time": int(data.get('min_repeat_time', 15)),
+            "max_repeat_time": int(data.get('max_repeat_time', 67)),
+            "allow_subset": data.get('allow_subset', False),
+            "batch_size": int(data.get('batch_size', 1)),
+            "number_set": int(data.get('number_set', 4))
         }
-        save_dynamic_config(data_to_save)
-        logger.info("Salvou novos dados.")
-
-        keywords_list = [kw.strip()
-                         for kw in keywords_list_str.split(",") if kw.strip()]
-        negative_keywords_list = [
-            kw.strip() for kw in negative_keywords_list_str.split(",") if kw.strip()]
-
-        telegram_bot = TelegramBot(log_callback=logger.info, token=token)
+        
+        save_dynamic_config(config)
+        
+        keywords_list = [kw.strip() for kw in config["keywords"].split(",") if kw.strip()]
+        negative_keywords_list = [kw.strip() for kw in config["negative_keywords_list"].split(",") if kw.strip()]
+        
+        # Cria instâncias - as classes usarão o logging centralizado automaticamente
+        telegram_bot = TelegramBot(token=config["token"])
         scraper = MarketRoxoScraperCloudflare(
-            log_callback=logger.info,
             base_url=BASE_URL,
-            proxies=PROXIES,
+            proxies=PROXIES
         )
-
-        # filtered_keywords = [
-        #     kw for kw in keywords_list if kw not in negative_keywords_list]
-        filtered_keywords = keywords_list
-
-        min_subset_size = max(2, len(filtered_keywords) // 2)
-        max_subset_size = len(filtered_keywords)
-        logger.info("Criando novo monitor.")
-
+        
         monitor = Monitor(
-            keywords=filtered_keywords,
+            keywords=keywords_list,
             negative_keywords_list=negative_keywords_list,
             scraper=scraper,
             telegram_bot=telegram_bot,
-            chat_id=chat_input,
-            batch_size=batch_size,
-            number_set=number_set,
-            monitoring_interval=interval_monitor,
-            log_callback=logger.info,
-            page_depth=page_depth,
-            retry_attempts=retry_attempts,
-            min_repeat_time=min_repeat_time,
-            max_repeat_time=max_repeat_time,
-            allow_subset=allow_subset,
-            min_subset_size=min_subset_size,
-            max_subset_size=max_subset_size
+            chat_id=config["chat_input"],
+            batch_size=config["batch_size"],
+            number_set=config["number_set"],
+            monitoring_interval=config["interval_monitor"],
+            page_depth=config["page_depth"],
+            retry_attempts=config["retry_attempts"],
+            min_repeat_time=config["min_repeat_time"],
+            max_repeat_time=config["max_repeat_time"],
+            allow_subset=config["allow_subset"],
+            min_subset_size=max(2, len(keywords_list) // 2),
+            max_subset_size=len(keywords_list)
         )
-
-        logger.info(f"Monitor criado: {monitor}")
+        
         monitor_thread = Thread(target=monitor.start)
         monitor_thread.daemon = True
         monitor_thread.start()
-        logger.info(f"Monitor thread iniciada: {monitor_thread.is_alive()}")
         save_monitor_status(True)
-
-        logger.info(
-            f"Monitoramento iniciado com palavras-chave: {', '.join(filtered_keywords)}, chat_id: {chat_input}, page_depth: {page_depth}, retry_attempts: {retry_attempts}, min_repeat_time: {min_repeat_time}, max_repeat_time: {max_repeat_time}")
+        
+        get_logger().info(f"Monitoramento iniciado com {len(keywords_list)} palavras-chave")
         return {"message": "Monitoramento iniciado com sucesso!"}, 200
+        
     except Exception as e:
-        logger.error(f"Erro ao iniciar monitoramento: {str(e)}")
-        return {"message": f"Erro ao iniciar monitoramento: {str(e)}"}, 500
-
+        get_logger().error(f"Erro ao iniciar monitoramento: {e}")
+        return {"message": f"Erro ao iniciar: {e}"}, 500
 
 @app.route('/stop', methods=['POST'])
 @requires_auth
 def stop():
     global monitor, monitor_thread
-    logger.info(f"Estado do monitor antes de parar: {monitor}")
-    logger.info(f"Estado da thread antes de parar: {monitor_thread}")
+    
     try:
-        # Verifica se o monitor está ativo NESTE PROCESSO
         if monitor and monitor_thread and monitor_thread.is_alive():
             monitor.stop()
-            monitor_thread.join(timeout=10)  # Aguarda a thread terminar
+            monitor_thread.join(timeout=10)
             monitor = None
             monitor_thread = None
-            save_monitor_status(False)  # Limpa o status persistido
-            logger.info("Monitoramento parado com sucesso")
+            save_monitor_status(False)
+            get_logger().info("Monitoramento parado com sucesso")
             return {"message": "Monitoramento parado com sucesso!"}, 200
-        elif load_monitor_status():  # Se não está ativo aqui, mas o arquivo diz que está
-            logger.warning(
-                "Monitoramento não ativo neste processo, mas monitor_status.json indica ativo. Resetando.")
-            save_monitor_status(False)  # Apenas limpa o arquivo
-            return {"message": "Monitoramento já estava parado (status resetado)."}, 200
         else:
-            logger.info("Nenhum monitoramento ativo para parar")
-            return {"message": "Nenhum monitoramento ativo para parar"}, 400
+            save_monitor_status(False)
+            return {"message": "Nenhum monitoramento ativo"}, 400
     except Exception as e:
-        logger.error(f"Erro ao parar monitoramento: {str(e)}")
-        return {"message": f"Erro ao parar monitoramento: {str(e)}"}, 500
-
+        get_logger().error(f"Erro ao parar monitoramento: {e}")
+        return {"message": f"Erro ao parar: {e}"}, 500
 
 @app.route('/logs')
 @requires_auth
 def logs():
-    """Retorna o conteúdo do arquivo de log ATUAL (app.log)."""
     try:
-        # Use log_file_path which points to the current log file in the LOGS_DIR
+        log_file_path = os.path.join(LOGS_DIR, 'app.log')
         with open(log_file_path, 'r', encoding='utf-8') as f:
-            log_content = f.read()
-        return Response(log_content, mimetype='text/plain')
+            content = f.read()
+        get_logger().info("Logs acessados via /logs")
+        return Response(content, mimetype='text/plain')
     except FileNotFoundError:
-        return {"message": f"O arquivo de log '{log_file_path}' não foi encontrado."}, 404
+        get_logger().error("Arquivo de log não encontrado")
+        return {"message": "Arquivo de log não encontrado"}, 404
     except Exception as e:
-        logger.error(f"Erro ao ler logs: {str(e)}")
-        return {"message": f"Erro ao ler logs: {str(e)}"}, 500
+        get_logger().error(f"Erro ao ler logs: {e}")
+        return {"message": f"Erro ao ler logs: {e}"}, 500
 
-
-@app.route('/archive_log', methods=['GET'])
+@app.route('/archive_log', methods=['POST'])
 @requires_auth
 def archive_log():
-    """Arquiva o log atual, renomeando com data/hora, e permite que o RotatingFileHandler crie um novo."""
     try:
-        # Tenta rotação normal primeiro
-        try:
-            file_handler.doRollover()
-            logger.info("Log rotated successfully by doRollover().")
-            return jsonify({'message': 'Log atual arquivado com sucesso. Nova sessão de log iniciada.'})
-        except Exception as e:
-            logger.warning(f"Rotação normal falhou: {e}. Tentando rotação forçada...")
-            # Se falhar, força a rotação
-            file_handler.force_rotation()
-            logger.info("Log rotated successfully by force_rotation().")
-            return jsonify({'message': 'Log atual arquivado com rotação forçada. Nova sessão de log iniciada.'})
-            
+        logger = get_logger()
+        gmt_minus_3 = timezone(timedelta(hours=-3))
+        timestamp = datetime.now(gmt_minus_3).strftime("%Y-%m-%d_%H-%M-%S")
+        log_file_path = os.path.join(LOGS_DIR, 'app.log')
+        
+        for handler in logger.handlers:
+            if isinstance(handler, ConcurrentRotatingFileHandler):
+                handler.close()
+                if os.path.exists(log_file_path):
+                    archived_name = f"{log_file_path}.{timestamp}"
+                    os.rename(log_file_path, archived_name)
+                open(log_file_path, 'a').close()  # Cria novo arquivo vazio
+                new_handler = ConcurrentRotatingFileHandler(
+                    log_file_path,
+                    maxBytes=10**10,
+                    backupCount=7,
+                    encoding='utf-8'
+                )
+                formatter = GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s')
+                new_handler.setFormatter(formatter)
+                logger.removeHandler(handler)
+                logger.addHandler(new_handler)
+                logger.info(f"Log rotacionado para {archived_name}")
+        return jsonify({"message": "Log arquivado com sucesso"}), 200
     except Exception as e:
-        logger.error(f"Erro ao arquivar log (todas as tentativas): {str(e)}")
-        return jsonify({'message': f'Erro ao arquivar log: {str(e)}'}), 500
-
+        get_logger().error(f"Erro ao arquivar log: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/download-logs', methods=['GET'])
 @requires_auth
 def download_logs():
-    """Compacta e baixa todos os logs na pasta 'logs'."""
     try:
-        files = []
+        log_files = []
         if os.path.exists(LOGS_DIR):
-            for f in os.listdir(LOGS_DIR):
-                if f.endswith('.log'):
-                    files.append(os.path.join(LOGS_DIR, f))
+            log_files = [os.path.join(LOGS_DIR, f) for f in os.listdir(LOGS_DIR) if f.endswith('.log')]
         
-        if not files:
-            return jsonify({'message': 'Nenhum arquivo de log encontrado para download.'}), 404
+        if not log_files:
+            get_logger().error("Nenhum arquivo de log encontrado")
+            return jsonify({'message': 'Nenhum arquivo de log encontrado'}), 404
         
         mem_zip = io.BytesIO()
         with zipfile.ZipFile(mem_zip, 'w') as zf:
-            for f in files:
-                zf.write(f, arcname=os.path.basename(f)) # Store only filename in zip
+            for log_file in log_files:
+                zf.write(log_file, arcname=os.path.basename(log_file))
+        
         mem_zip.seek(0)
-        return send_file(mem_zip, mimetype='application/zip', as_attachment=True, download_name='all_logs.zip')
+        get_logger().info("Logs baixados via /download-logs")
+        return send_file(mem_zip, mimetype='application/zip', 
+                        as_attachment=True, download_name='all_logs.zip')
     except Exception as e:
-        logger.error(f"Erro ao compactar logs para download: {str(e)}")
-        return jsonify({'message': f'Erro ao baixar logs: {str(e)}'}), 500
+        get_logger().error(f"Erro ao baixar logs: {e}")
+        return jsonify({'message': f'Erro ao baixar logs: {e}'}), 500
 
+@app.route('/download-hash-file', methods=['GET'])
+@requires_auth
+def download_hash_file():
+    data_dir = os.path.join(os.path.expanduser("~"), ".marketroxo_data")
+    hash_file_path = os.path.join(data_dir, "seen_ads.txt")
+    
+    if not os.path.exists(hash_file_path):
+        get_logger().error("Arquivo hash não encontrado")
+        return {"message": "Arquivo hash não encontrado"}, 404
+    
+    get_logger().info("Arquivo hash baixado via /download-hash-file")
+    return send_file(hash_file_path, as_attachment=True)
 
-# Este bloco só é executado quando o script é o principal
 if __name__ == '__main__':
-    # Ao iniciar o aplicativo, garanta que o status persistido do monitor seja FALSO.
-    # Isso evita problemas se o aplicativo foi encerrado de forma inesperada.
-    # Apenas se o monitor *realmente* está rodando, o status será True.
     save_monitor_status(False)
-    
-    # Log de inicialização com fuso horário GMT-3
-    logger.info("Aplicação iniciada - Servidor de monitoramento Market Roxo")
-    
-    app.run(debug=False, host='0.0.0.0',
-            port=5000, threaded=False, processes=1)
+    get_logger().info("Aplicação iniciada - Market Roxo Monitor")
+    app.run(debug=False, host='0.0.0.0', port=5000, threaded=False, processes=1)
