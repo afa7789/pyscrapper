@@ -359,6 +359,7 @@ def start():
             save_monitor_status(False)
             # A requisição continuará para iniciar o monitor agora.
 
+        logger.info("Iniciando novo monitoramento...")
         data = request.get_json()
 
         keywords_list_str = data.get('keywords_list', DEFAULT_KEYWORDS)
@@ -390,6 +391,7 @@ def start():
             "allow_subset": allow_subset
         }
         save_dynamic_config(data_to_save)
+        logger.info("Salvou novos dados.")
 
         keywords_list = [kw.strip()
                          for kw in keywords_list_str.split(",") if kw.strip()]
@@ -403,11 +405,13 @@ def start():
             proxies=PROXIES,
         )
 
-        filtered_keywords = [
-            kw for kw in keywords_list if kw not in negative_keywords_list]
+        # filtered_keywords = [
+        #     kw for kw in keywords_list if kw not in negative_keywords_list]
+        filtered_keywords = keywords_list
 
         min_subset_size = max(2, len(filtered_keywords) // 2)
         max_subset_size = len(filtered_keywords)
+        logger.info("Criando novo monitor.")
 
         monitor = Monitor(
             keywords=filtered_keywords,
