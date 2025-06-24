@@ -79,7 +79,16 @@ class Monitor:
         return seen
 
     def _save_ad_hash(self, ad_hash):
+        """Salva hash no arquivo com verificação de duplicata"""
         try:
+            # Verifica se o hash já existe no arquivo antes de salvar
+            if os.path.exists(self.hash_file):
+                with open(self.hash_file, 'r', encoding='utf-8') as f:
+                    existing_hashes = {line.strip() for line in f if line.strip()}
+                if ad_hash in existing_hashes:
+                    self.log_callback(f"🔄 Hash {ad_hash[:8]}...{ad_hash[-8:]} já existe no arquivo - não salvando novamente")
+                    return
+            
             with open(self.hash_file, 'a', encoding='utf-8') as f:
                 f.write(f"{ad_hash}\n")
         except Exception as e:
@@ -231,18 +240,20 @@ class Monitor:
         """Processa anúncios encontrados, filtra duplicatas e retorna anúncios realmente novos"""
         hash_ad_tuples = [(self._hash_ad(ad), ad) for ad in all_ads]
         truly_new_ads = []
-        truly_new_ads_hash_set = set()  # Usar set para garantir unicidade
-        truly_new_ads_hash_list = []    # Lista para manter ordem
+        truly_new_ads_hash_list = []
+        seen_in_this_cycle = set()  # Novo set para evitar duplicatas dentro do ciclo atual
         
         for ad_hash, ad in hash_ad_tuples:
-            # Verifica se o anúncio já foi visto anteriormente
+            # Verifica se o anúncio já foi visto anteriormente (arquivo/memória)
             if ad_hash in self.seen_ads:
                 continue
             # Verifica se o mesmo anúncio (baseado no hash) já está sendo considerado neste ciclo
-            if ad_hash in truly_new_ads_hash_set:
+            if ad_hash in seen_in_this_cycle:
+                self.log_callback(f"🔄 Hash duplicado encontrado no mesmo ciclo: {ad_hash[:8]}...{ad_hash[-8:]} - Ignorando")
                 continue
-            # Se o anúncio é novo, adiciona-o à lista
-            truly_new_ads_hash_set.add(ad_hash)
+            
+            # Se o anúncio é novo, adiciona-o à lista e marca como visto neste ciclo
+            seen_in_this_cycle.add(ad_hash)
             truly_new_ads_hash_list.append(ad_hash)
             truly_new_ads.append(ad)
         
@@ -256,36 +267,71 @@ class Monitor:
         
         self.log_callback(f"🍻 Encontrou {len(truly_new_ads)} anúncios ainda não vistos neste ciclo!")
         
+        # Verificação adicional de segurança antes de enviar
+        unique_hashes = set(truly_new_ads_hash)
+        if len(unique_hashes) != len(truly_new_ads_hash):
+            self.log_callback(f"⚠️ AVISO: Detectadas {len(truly_new_ads_hash) - len(unique_hashes)} duplicatas nos hashes antes do envio!")
+            # Remove duplicatas preservando ordem
+            seen_hashes = set()
+            filtered_ads = []
+            filtered_hashes = []
+            for i, ad_hash in enumerate(truly_new_ads_hash):
+                if ad_hash not in seen_hashes:
+                    seen_hashes.add(ad_hash)
+                    filtered_ads.append(truly_new_ads[i])
+                    filtered_hashes.append(ad_hash)
+            truly_new_ads = filtered_ads
+            truly_new_ads_hash = filtered_hashes
+            self.log_callback(f"🔧 Após filtrar duplicatas: {len(truly_new_ads)} anúncios únicos")
+        
         # Formatação com hash incluído
         formatted_ads = []
         for i, ad in enumerate(truly_new_ads):
             ad_hash = truly_new_ads_hash[i]
+            # Verifica novamente se este hash já foi processado (extra segurança)
+            if ad_hash in self.seen_ads:
+                self.log_callback(f"🚫 Hash {ad_hash[:8]}...{ad_hash[-8:]} já foi visto - pulando envio")
+                continue
             formatted_ad = f"Título: {ad['title']}\nURL: {ad['url']}\nHash: {ad_hash[:8]}...{ad_hash[-8:]}"
             formatted_ads.append(formatted_ad)
         
+        if not formatted_ads:
+            self.log_callback("ℹ️ Nenhum anúncio válido restou após verificações de duplicata.")
+            return
+        
         try:
             messages = self._split_message(formatted_ads)
-            for msg in messages:
+            successfully_sent_count = 0
+            
+            for msg_idx, msg in enumerate(messages):
                 if not self.running:
                     self.log_callback("🛑 Monitoramento interrompido antes de enviar todas as mensagens.")
                     break
                 
-                self.telegram_bot.send_message(self.chat_id, msg)
+                try:
+                    self.telegram_bot.send_message(self.chat_id, msg)
+                    successfully_sent_count += len(formatted_ads[msg_idx * self.batch_size:(msg_idx + 1) * self.batch_size])
+                    self.log_callback(f"📤 Mensagem {msg_idx + 1}/{len(messages)} enviada com sucesso")
+                except Exception as send_error:
+                    self.log_callback(f"❌ Erro ao enviar mensagem {msg_idx + 1}/{len(messages)}: {str(send_error)}")
+                    continue
                 
                 if self.stop_event.wait(timeout=1):
                     self.running = False
                     self.log_callback("🛑 Monitoramento interrompido durante o envio de mensagens.")
                     break
             
-            if self.running:
-                # Adicionar hashes ao conjunto de vistos E salvar no arquivo
-                for ad_hash in truly_new_ads_hash:
-                    self.seen_ads.add(ad_hash)  # Adiciona ao set em memória
-                    self._save_ad_hash(ad_hash)  # Salva no arquivo
-                self.log_callback(f"📩 Enviados {len(truly_new_ads)} novos anúncios para Telegram")
+            if self.running and successfully_sent_count > 0:
+                # Adicionar apenas os hashes dos anúncios que foram efetivamente enviados
+                hashes_to_save = truly_new_ads_hash[:successfully_sent_count]
+                for ad_hash in hashes_to_save:
+                    if ad_hash not in self.seen_ads:  # Verificação final antes de salvar
+                        self.seen_ads.add(ad_hash)  # Adiciona ao set em memória
+                        self._save_ad_hash(ad_hash)  # Salva no arquivo
+                self.log_callback(f"📩 Enviados {successfully_sent_count} novos anúncios para Telegram e salvos {len(hashes_to_save)} hashes")
                 
         except Exception as e:
-            self.log_callback(f"❌ Erro ao enviar mensagens para Telegram: {str(e)}")
+            self.log_callback(f"❌ Erro geral ao enviar mensagens para Telegram: {str(e)}")
 
     def _wait_for_next_cycle(self):
         """Aguarda o intervalo antes do próximo ciclo de monitoramento"""
