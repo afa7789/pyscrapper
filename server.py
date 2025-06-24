@@ -10,31 +10,92 @@ from monitor import Monitor
 from scraper_cloudflare import MarketRoxoScraperCloudflare
 from telegram_bot import TelegramBot
 from flask import send_file
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import jsonify, send_from_directory, abort
 import zipfile
 import io
 
 app = Flask(__name__, template_folder='template')
 
-# --- Configuração de Logging com Rotação Diária ---
+# --- Configuração de Logging com Rotação Diária e Fuso Horário GMT-3 ---
 LOGS_DIR = 'logs'  # Dedicated directory for all logs
 os.makedirs(LOGS_DIR, exist_ok=True) # Ensure the directory exists
 
 log_file_base = 'app' # Base name for the current log file
 log_file_path = os.path.join(LOGS_DIR, f'{log_file_base}.log')
 
-file_handler = TimedRotatingFileHandler(
+# Classe customizada para formatar logs com GMT-3
+class GMT3Formatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        # Criar timezone GMT-3
+        gmt_minus_3 = timezone(timedelta(hours=-3))
+        # Converter timestamp para GMT-3
+        dt = datetime.fromtimestamp(record.created, tz=gmt_minus_3)
+        if datefmt:
+            return dt.strftime(datefmt)
+        else:
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+# Classe customizada do TimedRotatingFileHandler para forçar rotação
+class ForceRotatingFileHandler(TimedRotatingFileHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+    def doRollover(self):
+        """Override doRollover para adicionar tratamento de erro e força rotação"""
+        try:
+            super().doRollover()
+        except Exception as e:
+            # Se a rotação normal falhar, tenta forçar
+            try:
+                self.force_rotation()
+            except Exception as e2:
+                # Log o erro usando print para não criar loop
+                print(f"Erro na rotação de log: {e}, Erro na rotação forçada: {e2}")
+    
+    def force_rotation(self):
+        """Força a rotação do log manualmente"""
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+            
+        # Gera nome do arquivo rotacionado com timestamp GMT-3
+        gmt_minus_3 = timezone(timedelta(hours=-3))
+        now = datetime.now(gmt_minus_3)
+        suffix = now.strftime("%Y-%m-%d_%H-%M-%S")
+        
+        base_filename = self.baseFilename
+        rotated_filename = f"{base_filename}.{suffix}"
+        
+        # Tenta renomear o arquivo atual
+        try:
+            if os.path.exists(base_filename):
+                os.rename(base_filename, rotated_filename)
+        except OSError as e:
+            print(f"Erro ao renomear arquivo de log: {e}")
+            # Se não conseguir renomear, pelo menos trunca o arquivo
+            try:
+                open(base_filename, 'w').close()
+            except:
+                pass
+        
+        # Reabre o stream
+        self.stream = self._open()
+
+file_handler = ForceRotatingFileHandler(
     log_file_path, # Path includes the logs directory
     when='midnight',
     interval=1,
     backupCount=7,
     encoding='utf-8'
 )
-file_handler.setFormatter(logging.Formatter(
+
+# Usar o formatter customizado com GMT-3
+gmt3_formatter = GMT3Formatter(
     '%(asctime)s - %(levelname).1s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
-))
+)
+file_handler.setFormatter(gmt3_formatter)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -262,7 +323,7 @@ def start():
         if monitor and monitor_thread and monitor_thread.is_alive():
             logger.info(
                 "Monitoramento já está ativo (verificado por variável global)")
-            return {"message": "Monitoramento já está ativo!"}, 400
+            return {"message": "Monitoramento já está ativo!, caso tenha encerrado espere 10 segundos e tente novamente."}, 400
 
         if load_monitor_status():  # Verifica o status persistido
             logger.info(
@@ -413,14 +474,20 @@ def logs():
 def archive_log():
     """Arquiva o log atual, renomeando com data/hora, e permite que o RotatingFileHandler crie um novo."""
     try:
-        # Call doRollover() to force the TimedRotatingFileHandler to rotate the log.
-        # This will rename the current log_file_path (e.g., app.log) to app.log.YYYY-MM-DD
-        # and create a new empty app.log for further logging.
-        file_handler.doRollover()
-        logger.info("Log rotated successfully by doRollover().")
-        return jsonify({'message': 'Log atual arquivado. Nova sessão de log iniciada.'})
+        # Tenta rotação normal primeiro
+        try:
+            file_handler.doRollover()
+            logger.info("Log rotated successfully by doRollover().")
+            return jsonify({'message': 'Log atual arquivado com sucesso. Nova sessão de log iniciada.'})
+        except Exception as e:
+            logger.warning(f"Rotação normal falhou: {e}. Tentando rotação forçada...")
+            # Se falhar, força a rotação
+            file_handler.force_rotation()
+            logger.info("Log rotated successfully by force_rotation().")
+            return jsonify({'message': 'Log atual arquivado com rotação forçada. Nova sessão de log iniciada.'})
+            
     except Exception as e:
-        logger.error(f"Erro ao arquivar log: {str(e)}")
+        logger.error(f"Erro ao arquivar log (todas as tentativas): {str(e)}")
         return jsonify({'message': f'Erro ao arquivar log: {str(e)}'}), 500
 
 
@@ -455,5 +522,9 @@ if __name__ == '__main__':
     # Isso evita problemas se o aplicativo foi encerrado de forma inesperada.
     # Apenas se o monitor *realmente* está rodando, o status será True.
     save_monitor_status(False)
+    
+    # Log de inicialização com fuso horário GMT-3
+    logger.info("Aplicação iniciada - Servidor de monitoramento Market Roxo")
+    
     app.run(debug=False, host='0.0.0.0',
             port=5000, threaded=False, processes=1)
