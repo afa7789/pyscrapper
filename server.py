@@ -15,6 +15,9 @@ from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 app = Flask(__name__, template_folder='template')
 
+# Configura o logger no início da aplicação
+setup_logging()
+
 # Carrega variáveis de ambiente
 load_dotenv()
 
