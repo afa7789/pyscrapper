@@ -256,7 +256,7 @@ def logs():
         log_file_path = os.path.join(LOGS_DIR, 'app.log')
         with open(log_file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        get_logger().info("Logs acessados via /logs")
+        get_logger().debug("Logs acessados via /logs")
         return Response(content, mimetype='text/plain')
     except FileNotFoundError:
         get_logger().error("Arquivo de log não encontrado")

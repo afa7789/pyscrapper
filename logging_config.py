@@ -70,6 +70,10 @@ def get_logger():
     
     return logger
 
+def log_debug(message):
+    """Função de conveniência para log de debug"""
+    get_logger().debug(message)
+
 def log_info(message):
     """Função de conveniência para log de info"""
     get_logger().info(message)
