@@ -265,7 +265,7 @@ def logs():
         get_logger().error(f"Erro ao ler logs: {e}")
         return {"message": f"Erro ao ler logs: {e}"}, 500
 
-@app.route('/archive_log', methods=['POST'])
+@app.route('/archive_log', methods=['GET'])
 @requires_auth
 def archive_log():
     try:
