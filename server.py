@@ -18,79 +18,98 @@ import io
 app = Flask(__name__, template_folder='template')
 
 # --- Configuração de Logging com Rotação Diária e Fuso Horário GMT-3 ---
-LOGS_DIR = 'logs'  # Dedicated directory for all logs
-os.makedirs(LOGS_DIR, exist_ok=True) # Ensure the directory exists
+LOGS_DIR = 'logs'
+os.makedirs(LOGS_DIR, exist_ok=True)
 
-log_file_base = 'app' # Base name for the current log file
+log_file_base = 'app'
 log_file_path = os.path.join(LOGS_DIR, f'{log_file_base}.log')
 
 # Classe customizada para formatar logs com GMT-3
 class GMT3Formatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
-        # Criar timezone GMT-3
         gmt_minus_3 = timezone(timedelta(hours=-3))
-        # Converter timestamp para GMT-3
         dt = datetime.fromtimestamp(record.created, tz=gmt_minus_3)
         if datefmt:
             return dt.strftime(datefmt)
         else:
             return dt.strftime('%Y-%m-%d %H:%M:%S')
 
-# Classe customizada do TimedRotatingFileHandler para forçar rotação
+# Classe customizada do TimedRotatingFileHandler para rotação com data e hora
 class ForceRotatingFileHandler(TimedRotatingFileHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-    def doRollover(self):
-        """Override doRollover para adicionar tratamento de erro e força rotação"""
-        try:
-            super().doRollover()
-        except Exception as e:
-            # Se a rotação normal falhar, tenta forçar
-            try:
-                self.force_rotation()
-            except Exception as e2:
-                # Log o erro usando print para não criar loop
-                print(f"Erro na rotação de log: {e}, Erro na rotação forçada: {e2}")
-    
-    def force_rotation(self):
-        """Força a rotação do log manualmente"""
-        if self.stream:
-            self.stream.close()
-            self.stream = None
-            
-        # Gera nome do arquivo rotacionado com timestamp GMT-3
+        self.namer = self.custom_namer  # Define o método de nomeação personalizado
+
+    def custom_namer(self, default_name):
+        """
+        Personaliza o nome do arquivo rotacionado para incluir data e hora.
+        Exemplo: app.log -> app.log.2025-06-24_13-01-37
+        """
         gmt_minus_3 = timezone(timedelta(hours=-3))
         now = datetime.now(gmt_minus_3)
         suffix = now.strftime("%Y-%m-%d_%H-%M-%S")
-        
+        base, ext = os.path.splitext(default_name)
+        return f"{base}.{suffix}{ext}"
+
+    def doRollover(self):
+        """
+        Executa a rotação do log, garantindo que o arquivo atual seja truncado.
+        """
+        try:
+            if self.stream:
+                self.stream.close()
+                self.stream = None
+
+            # Executa a rotação padrão
+            super().doRollover()
+
+            # Garante que o arquivo atual seja truncado/recriado
+            try:
+                with open(self.baseFilename, 'w', encoding='utf-8'):
+                    pass  # Trunca o arquivo
+            except Exception as e:
+                print(f"Erro ao truncar arquivo de log {self.baseFilename}: {e}")
+
+        except Exception as e:
+            print(f"Erro na rotação padrão: {e}. Tentando rotação forçada...")
+            try:
+                self.force_rotation()
+            except Exception as e2:
+                print(f"Erro na rotação forçada: {e2}")
+
+    def force_rotation(self):
+        """
+        Força a rotação do log manualmente, incluindo data e hora no nome.
+        """
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+
+        gmt_minus_3 = timezone(timedelta(hours=-3))
+        now = datetime.now(gmt_minus_3)
+        suffix = now.strftime("%Y-%m-%d_%H-%M-%S")
         base_filename = self.baseFilename
         rotated_filename = f"{base_filename}.{suffix}"
-        
-        # Tenta renomear o arquivo atual
+
         try:
             if os.path.exists(base_filename):
                 os.rename(base_filename, rotated_filename)
-        except OSError as e:
-            print(f"Erro ao renomear arquivo de log: {e}")
-            # Se não conseguir renomear, pelo menos trunca o arquivo
-            try:
-                open(base_filename, 'w').close()
-            except:
+            # Cria um novo arquivo vazio
+            with open(base_filename, 'w', encoding='utf-8'):
                 pass
-        
-        # Reabre o stream
-        self.stream = self._open()
+        except OSError as e:
+            print(f"Erro ao forçar rotação do log: {e}")
+        finally:
+            self.stream = self._open()
 
 file_handler = ForceRotatingFileHandler(
-    log_file_path, # Path includes the logs directory
+    log_file_path,
     when='midnight',
     interval=1,
     backupCount=7,
     encoding='utf-8'
 )
 
-# Usar o formatter customizado com GMT-3
 gmt3_formatter = GMT3Formatter(
     '%(asctime)s - %(levelname).1s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
