@@ -445,6 +445,7 @@
         <br>
         <span id="autoUpdateStatus" class="status">Carregando logs...</span>
         <div class="log-header">Logs do Sistema (Atualização Automática)</div>
+        <button id="scrollLogBtn" style="background-color:#ffa726;color:white;margin-bottom:10px;" onclick="scrollToLogBottom()">⬇️ Ir para o fim do log</button>
         <pre id="logOutput">Carregando logs...</pre>
     </div>
     <script>
@@ -466,6 +467,13 @@
                 document.getElementById('autoUpdateStatus').textContent = 'Atualização automática: Desativada';
             }
         }
+
+        // Função para descer até o fim do log
+        function scrollToLogBottom() {
+            const logOutput = document.getElementById('logOutput');
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
 
         // Função para buscar os logs
         function fetchLogs() {
