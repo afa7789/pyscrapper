@@ -44,27 +44,14 @@ class MarketRoxoScraperCloudflare:
     def _setup_proxies(self, proxies):
         """Configura proxies se fornecidos"""
         if proxies and proxies != "":
-            # If proxies is a dict, use as is (backward compatibility)
-            if isinstance(proxies, dict):
-                proxy_config = {
-                    "http": proxies.get("http"),
-                    "https": proxies.get("https")
-                }
-                self.logger.info(f"✅ Proxies configurados (dict): {proxy_config}")
-                return proxy_config
-            # If proxies is a string, convert to dict for requests/cloudscraper
-            elif isinstance(proxies, str):
-                # Accepts "user:pass@ip:port" or "ip:port"
-                proxy_url = proxies if "://" in proxies else f"http://{proxies}"
-                proxy_config = {
-                    "http": proxy_url,
-                    "https": proxy_url
-                }
-                self.logger.info(f"✅ Proxies configurados (string): {proxy_config}")
-                return proxy_config
-            else:
-                self.logger.warning("⚠️ Tipo de proxy não reconhecido, ignorando configuração de proxy.")
-                return None
+            # Assume formato "user:pass@ip:port" ou "ip:port"
+            # Simplesmente retorna o dicionário esperado por requests
+            proxy_config = {
+                "http": f"{proxies.get('http')}",
+                "https": f"{proxies.get('https')}"
+            }
+            self.logger.info(f"✅ Proxies configurados: {proxy_config}")
+            return proxy_config
         self.logger.info("ℹ️ Nenhum proxy configurado.")
         return None
 

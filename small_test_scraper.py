@@ -27,9 +27,14 @@ def main():
     # Configuração do proxy (opcional)
     http_proxy = os.getenv("HTTP_PROXY", "")
     https_proxy = os.getenv("HTTPS_PROXY", "")
-    proxy_config = http_proxy or https_proxy or ""
-
-    # proxy_config = ""
+    proxy_config = None
+    if http_proxy or https_proxy:
+        proxy_config = {}
+        if http_proxy:
+            proxy_config["http"] = http_proxy
+        if https_proxy:
+            proxy_config["https"] = https_proxy
+    # Se nenhum proxy, proxy_config permanece None
 
     # Palavras-chave para buscar (também usadas como query_keywords para a URL)
     keywords_str = "iphone,ipad,apple"
