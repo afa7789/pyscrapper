@@ -234,7 +234,7 @@ def stop():
     global monitor, monitor_thread
     
     try:
-        if monitor and monitor_thread and monitor_thread.is_alive():
+        if monitor or monitor_thread or monitor_thread.is_alive():
             monitor.stop()
             monitor_thread.join(timeout=10)
             monitor = None
