@@ -2,6 +2,7 @@ from flask import Flask, Response, request, render_template, send_file, jsonify
 from functools import wraps
 import os
 import fcntl
+import psutil
 from dotenv import load_dotenv
 import json
 from monitor import Monitor
@@ -75,34 +76,69 @@ PROXIES = {
 
 # Variável do monitor
 monitor = None
+lock_file_handle = None
 
 def acquire_lock():
-    """Tenta adquirir o lock file para garantir uma única instância do monitor"""
+    """Tenta adquirir o lock file e armazena o PID do processo atual"""
+    global lock_file_handle
     try:
-        lock_file = open(LOCK_FILE, 'w')
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return lock_file
+        lock_file_handle = open(LOCK_FILE, 'w')
+        fcntl.flock(lock_file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        pid = os.getpid()
+        lock_file_handle.write(str(pid))
+        lock_file_handle.flush()
+        get_logger().info(f"Lock adquirido pelo processo {pid}")
+        return True
     except IOError:
-        lock_file.close()
-        return None
+        if lock_file_handle:
+            lock_file_handle.close()
+            lock_file_handle = None
+        return False
 
-def release_lock(lock_file):
+def release_lock():
     """Libera o lock file"""
-    if lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-        lock_file.close()
+    global lock_file_handle
+    if lock_file_handle:
         try:
-            os.remove(LOCK_FILE)
-        except OSError:
-            pass
+            fcntl.flock(lock_file_handle.fileno(), fcntl.LOCK_UN)
+            lock_file_handle.close()
+            lock_file_handle = None
+            if os.path.exists(LOCK_FILE):
+                os.remove(LOCK_FILE)
+            get_logger().info("Lock file removido")
+        except OSError as e:
+            get_logger().error(f"Erro ao liberar lock: {str(e)}")
 
 def is_monitor_running():
-    """Verifica se o monitor está rodando tentando adquirir o lock"""
-    lock_file = acquire_lock()
-    if lock_file:
-        release_lock(lock_file)
+    """Verifica se o monitor está rodando com base no PID no lock file"""
+    if not os.path.exists(LOCK_FILE):
         return False
-    return True
+    try:
+        with open(LOCK_FILE, 'r') as f:
+            pid_str = f.read().strip()
+            if pid_str and pid_str.isdigit():
+                pid = int(pid_str)
+                if psutil.pid_exists(pid):
+                    # Verifica se é realmente um processo Python
+                    try:
+                        process = psutil.Process(pid)
+                        cmdline = ' '.join(process.cmdline())
+                        if 'python' in cmdline.lower() and ('server' in cmdline or 'gunicorn' in cmdline):
+                            return True
+                    except psutil.NoSuchProcess:
+                        pass
+                
+                # Se chegou aqui, o PID não existe ou não é um processo válido
+                get_logger().info(f"Processo {pid} não existe mais, limpando lock file")
+                try:
+                    os.remove(LOCK_FILE)
+                except OSError:
+                    pass
+                return False
+    except (ValueError, OSError, IOError) as e:
+        get_logger().error(f"Erro ao verificar lock file: {e}")
+        return False
+    return False
 
 # --- Autenticação ---
 def check_auth(username, password):
@@ -173,10 +209,13 @@ def admin():
 def start():
     global monitor
     
-    lock_file = acquire_lock()
-    if not lock_file:
+    if is_monitor_running():
         get_logger().info("Tentativa de iniciar monitoramento enquanto já está ativo")
-        return {"message": "Monitoramento já está ativo!"}, 400
+        return jsonify({"message": "Monitoramento já está ativo!"}), 400
+    
+    if not acquire_lock():
+        get_logger().error("Não foi possível adquirir o lock file")
+        return jsonify({"message": "Não foi possível iniciar monitoramento - lock ocupado"}), 500
     
     try:
         data = request.get_json()
@@ -226,59 +265,108 @@ def start():
         )
         
         if not monitor.start_async():
-            release_lock(lock_file)
+            release_lock()
             monitor = None
-            return {"message": "Erro ao iniciar monitoramento: já está ativo"}, 500
+            return jsonify({"message": "Erro ao iniciar monitoramento: já está ativo"}), 500
         
         get_logger().info(f"Monitoramento iniciado com {len(keywords_list)} palavras-chave")
-        return {"message": "Monitoramento iniciado com sucesso!"}, 200
+        return jsonify({"message": "Monitoramento iniciado com sucesso!"}), 200
         
     except Exception as e:
         get_logger().error(f"Erro ao iniciar monitoramento: {str(e)}")
-        release_lock(lock_file)
+        release_lock()
         monitor = None
-        return {"message": f"Erro ao iniciar: {str(e)}"}, 500
-    finally:
-        # Keep the lock file open until the monitor stops
-        pass
+        return jsonify({"message": f"Erro ao iniciar: {str(e)}"}), 500
 
 @app.route('/stop', methods=['POST'])
 @requires_auth
 def stop():
     global monitor
+    logger = get_logger()
     
     if not is_monitor_running():
-        get_logger().info("Nenhum monitoramento ativo detectado")
-        return {"message": "Nenhum monitoramento ativo"}, 400
+        logger.info("Nenhum monitoramento ativo detectado")
+        return jsonify({"message": "Nenhum monitoramento ativo"}), 400
     
     try:
-        if monitor and monitor.is_running:
-            success = monitor.stop()
-            if success:
-                get_logger().info("Monitoramento encerrado com sucesso")
-                monitor = None
-                release_lock_file()
-                return {"message": "Monitoramento encerrado com sucesso!"}, 200
+        # Verifica se é o mesmo processo que iniciou o monitoramento
+        if not os.path.exists(LOCK_FILE):
+            logger.info("Lock file não existe")
+            return jsonify({"message": "Nenhum monitoramento ativo"}), 400
+            
+        with open(LOCK_FILE, 'r') as f:
+            pid_str = f.read().strip()
+            
+        if not pid_str.isdigit():
+            logger.error("PID inválido no lock file")
+            return jsonify({"message": "Lock file corrompido"}), 500
+            
+        lock_pid = int(pid_str)
+        current_pid = os.getpid()
+        
+        if lock_pid == current_pid:
+            # Este é o processo que iniciou o monitoramento
+            if monitor and monitor.is_running:
+                success = monitor.stop()
+                if success:
+                    logger.info("Monitoramento encerrado com sucesso")
+                    monitor = None
+                    release_lock()
+                    return jsonify({"message": "Monitoramento encerrado com sucesso!"}), 200
+                else:
+                    logger.warning("Falha ao encerrar monitoramento")
+                    return jsonify({"message": "Falha ao encerrar monitoramento, tente novamente"}), 500
             else:
-                get_logger().warning("Falha ao encerrar monitoramento, mantendo monitor para nova tentativa")
-                return {"message": "Falha ao encerrar monitoramento, tente novamente"}, 500
+                logger.info("Monitor local não está rodando, limpando lock")
+                release_lock()
+                return jsonify({"message": "Monitoramento não estava ativo, lock limpo"}), 200
         else:
-            get_logger().info("Nenhum monitor local ativo, mas lock file existe")
-            return {"message": "Monitoramento ativo em outro processo, tente novamente"}, 400
+            # Outro processo iniciou o monitoramento
+            if not psutil.pid_exists(lock_pid):
+                logger.info("Processo monitor não existe mais, limpando lock")
+                try:
+                    os.remove(LOCK_FILE)
+                except OSError:
+                    pass
+                return jsonify({"message": "Monitoramento inativo, lock limpo"}), 200
+            else:
+                logger.info(f"Monitoramento ativo em outro processo (PID: {lock_pid})")
+                return jsonify({"message": "Monitoramento ativo em outro processo"}), 400
+                
     except Exception as e:
-        get_logger().error(f"Erro ao encerrar monitoramento: {str(e)}")
-        return {"message": f"Erro ao encerrar: {str(e)}"}, 500
+        logger.error(f"Erro ao encerrar monitoramento: {str(e)}")
+        return jsonify({"message": f"Erro ao encerrar: {str(e)}"}), 500
 
-def release_lock_file():
-    """Libera o lock file se existir"""
-    if os.path.exists(LOCK_FILE):
-        try:
-            with open(LOCK_FILE, 'r') as lock_file:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            os.remove(LOCK_FILE)
-            get_logger().info("Lock file removido com sucesso")
-        except Exception as e:
-            get_logger().error(f"Erro ao remover lock file: {str(e)}")
+@app.route('/status', methods=['GET'])
+@requires_auth
+def status():
+    """Nova rota para verificar o status do monitoramento"""
+    try:
+        if is_monitor_running():
+            if os.path.exists(LOCK_FILE):
+                with open(LOCK_FILE, 'r') as f:
+                    pid = f.read().strip()
+                return jsonify({
+                    "status": "running",
+                    "message": f"Monitoramento ativo (PID: {pid})",
+                    "is_local": pid == str(os.getpid())
+                }), 200
+            else:
+                return jsonify({
+                    "status": "unknown",
+                    "message": "Status inconsistente"
+                }), 500
+        else:
+            return jsonify({
+                "status": "stopped",
+                "message": "Nenhum monitoramento ativo"
+            }), 200
+    except Exception as e:
+        get_logger().error(f"Erro ao verificar status: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Erro ao verificar status: {str(e)}"
+        }), 500
 
 @app.route('/logs')
 @requires_auth
@@ -291,10 +379,10 @@ def logs():
         return Response(content, mimetype='text/plain')
     except FileNotFoundError:
         get_logger().error("Arquivo de log não encontrado")
-        return {"message": "Arquivo de log não encontrado"}, 404
+        return jsonify({"message": "Arquivo de log não encontrado"}), 404
     except Exception as e:
         get_logger().error(f"Erro ao ler logs: {str(e)}")
-        return {"message": f"Erro ao ler logs: {str(e)}"}, 500
+        return jsonify({"message": f"Erro ao ler logs: {str(e)}"}), 500
 
 @app.route('/archive_log', methods=['GET'])
 @requires_auth
@@ -351,7 +439,7 @@ def download_logs():
                         as_attachment=True, download_name='all_logs.zip')
     except Exception as e:
         get_logger().error(f"Erro ao baixar logs: {str(e)}")
-        return {"message": f"Erro ao baixar logs: {str(e)}"}, 500
+        return jsonify({"message": f"Erro ao baixar logs: {str(e)}"}), 500
 
 @app.route('/download-hash-file', methods=['GET'])
 @requires_auth
@@ -361,10 +449,22 @@ def download_hash_file():
     
     if not os.path.exists(hash_file_path):
         get_logger().error("Arquivo hash não encontrado")
-        return {"message": "Arquivo hash não encontrado"}, 404
+        return jsonify({"message": "Arquivo hash não encontrado"}), 404
     
     get_logger().info("Arquivo hash baixado via /download-hash-file")
     return send_file(hash_file_path, as_attachment=True)
+
+# Função de limpeza para quando a aplicação é encerrada
+def cleanup():
+    """Limpa recursos quando a aplicação é encerrada"""
+    global monitor
+    if monitor and monitor.is_running:
+        get_logger().info("Encerrando monitoramento durante cleanup...")
+        monitor.stop()
+    release_lock()
+
+import atexit
+atexit.register(cleanup)
 
 if __name__ == '__main__':
     get_logger().info("Aplicação iniciada - Market Roxo Monitor")

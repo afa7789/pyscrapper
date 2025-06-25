@@ -450,14 +450,13 @@
         <pre id="logOutput">Carregando logs...</pre>
     </div>
     <script>
-
         // --- Subset count script ---
         function comb(n, k) {
             if (k > n) return 0;
             let num = 1, denom = 1;
             for (let i = 1; i <= k; i++) {
-                num *= (n - i + 1);
-                denom *= i;
+            num *= (n - i + 1);
+            denom *= i;
             }
             return num / denom;
         }
@@ -466,20 +465,20 @@
             // Use keywords from the keywords input
             const rawKeywords = document.getElementById('keywords').value;
             const keywords = rawKeywords.split(',')
-                .map(kw => kw.trim())
-                .filter(kw => kw.length);
+            .map(kw => kw.trim())
+            .filter(kw => kw.length);
             const n = keywords.length;
             if (n === 0) {
-                document.getElementById('subsetCount').textContent = '';
-                return;
+            document.getElementById('subsetCount').textContent = '';
+            return;
             }
             const minSubsetSize = n >= 3 ? 3 : n;
             let totalSubsets = 0;
             for (let i = minSubsetSize; i <= n; i++) {
-                totalSubsets += comb(n, i);
+            totalSubsets += comb(n, i);
             }
             document.getElementById('subsetCount').textContent =
-                'Subconjuntos (' + minSubsetSize + ' a ' + n + '): ' + totalSubsets;
+            'Subconjuntos (' + minSubsetSize + ' a ' + n + '): ' + totalSubsets;
         }
 
         // Inicialização ao carregar a página e sempre que keywords ou number_set mudarem
