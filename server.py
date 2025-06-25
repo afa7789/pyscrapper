@@ -221,7 +221,7 @@ def start():
             min_repeat_time=config["min_repeat_time"],
             max_repeat_time=config["max_repeat_time"],
             allow_subset=config["allow_subset"],
-            min_subset_size=max(2, len(keywords_list) // 2),
+            min_subset_size=3 if len(keywords_list) >= 3 else len(keywords_list),
             max_subset_size=len(keywords_list)
         )
         

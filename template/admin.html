@@ -473,7 +473,7 @@
                 document.getElementById('subsetCount').textContent = '';
                 return;
             }
-            const minSubsetSize = Math.max(2, Math.floor(n / 2));
+            const minSubsetSize = n >= 3 ? 3 : n;
             let totalSubsets = 0;
             for (let i = minSubsetSize; i <= n; i++) {
                 totalSubsets += comb(n, i);
