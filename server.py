@@ -323,44 +323,110 @@ def stop():
             
         if not pid_str.isdigit():
             logger.error("PID inválido no lock file")
-            return jsonify({"message": "Lock file corrompido"}), 500
+            # Remove lock file corrompido
+            try:
+                os.remove(LOCK_FILE)
+                logger.info("Lock file corrompido removido")
+            except OSError:
+                pass
+            return jsonify({"message": "Lock file corrompido removido"}), 200
             
         lock_pid = int(pid_str)
         current_pid = os.getpid()
         
+        # MUDANÇA PRINCIPAL: Tenta encerrar independente do PID
         if lock_pid == current_pid:
-            # Este é o processo que iniciou o monitoramento
+            # Este é o processo que iniciou o monitoramento - método normal
             if monitor and monitor.is_running:
                 success = monitor.stop()
                 if success:
-                    logger.info("Monitoramento encerrado com sucesso")
+                    logger.info("Monitoramento encerrado com sucesso (processo local)")
                     monitor = None
                     release_lock()
                     return jsonify({"message": "Monitoramento encerrado com sucesso!"}), 200
                 else:
-                    logger.warning("Falha ao encerrar monitoramento")
-                    return jsonify({"message": "Falha ao encerrar monitoramento, tente novamente"}), 500
+                    logger.warning("Falha ao encerrar monitoramento local")
+                    # Continua para tentar encerramento forçado
             else:
                 logger.info("Monitor local não está rodando, limpando lock")
                 release_lock()
                 return jsonify({"message": "Monitoramento não estava ativo, lock limpo"}), 200
-        else:
-            # Outro processo iniciou o monitoramento
-            if not psutil.pid_exists(lock_pid):
-                logger.info("Processo monitor não existe mais, limpando lock")
+        
+        # Encerramento de processo externo ou fallback para processo local
+        if psutil.pid_exists(lock_pid):
+            try:
+                process = psutil.Process(lock_pid)
+                
+                # Verifica se é realmente um processo Python relacionado
+                cmdline = ' '.join(process.cmdline())
+                if not ('python' in cmdline.lower() and ('server' in cmdline or 'gunicorn' in cmdline)):
+                    logger.warning(f"Processo {lock_pid} não parece ser relacionado ao monitor")
+                    # Remove lock de processo não relacionado
+                    try:
+                        os.remove(LOCK_FILE)
+                        logger.info("Lock de processo não relacionado removido")
+                    except OSError:
+                        pass
+                    return jsonify({"message": "Lock de processo inválido removido"}), 200
+                
+                logger.info(f"Tentando encerrar processo monitor {lock_pid}")
+                
+                # Tenta encerrar graciosamente primeiro
+                process.terminate()
+                
+                # Aguarda um pouco para o processo encerrar
+                try:
+                    process.wait(timeout=3)
+                    logger.info(f"Processo {lock_pid} encerrado graciosamente")
+                except psutil.TimeoutExpired:
+                    # Se não encerrou graciosamente, força o encerramento
+                    logger.warning(f"Forçando encerramento do processo {lock_pid}")
+                    process.kill()
+                    process.wait(timeout=2)
+                    logger.info(f"Processo {lock_pid} encerrado forçadamente")
+                
+                # Remove o lock file após encerrar o processo
                 try:
                     os.remove(LOCK_FILE)
+                    logger.info("Lock file removido após encerramento do processo")
+                except OSError as e:
+                    logger.warning(f"Erro ao remover lock file: {e}")
+                
+                # Limpa a variável monitor local se necessário
+                monitor = None
+                
+                return jsonify({"message": "Monitoramento encerrado com sucesso!"}), 200
+                
+            except psutil.NoSuchProcess:
+                logger.info(f"Processo {lock_pid} não existe mais, limpando lock")
+                try:
+                    os.remove(LOCK_FILE)
+                    logger.info("Lock file de processo inexistente removido")
                 except OSError:
                     pass
-                return jsonify({"message": "Monitoramento inativo, lock limpo"}), 200
-            else:
-                logger.info(f"Monitoramento ativo em outro processo (PID: {lock_pid})")
-                return jsonify({"message": "Monitoramento ativo em outro processo"}), 400
+                return jsonify({"message": "Processo não existe mais, lock limpo"}), 200
+                
+            except psutil.AccessDenied:
+                logger.error(f"Sem permissão para encerrar processo {lock_pid}")
+                return jsonify({"message": f"Sem permissão para encerrar processo {lock_pid}"}), 403
+                
+            except Exception as e:
+                logger.error(f"Erro ao encerrar processo {lock_pid}: {str(e)}")
+                return jsonify({"message": f"Erro ao encerrar processo: {str(e)}"}), 500
+        else:
+            logger.info(f"Processo {lock_pid} não existe mais, limpando lock")
+            try:
+                os.remove(LOCK_FILE)
+                logger.info("Lock file de processo inexistente removido")
+            except OSError:
+                pass
+            return jsonify({"message": "Processo não existe mais, lock limpo"}), 200
                 
     except Exception as e:
         logger.error(f"Erro ao encerrar monitoramento: {str(e)}")
         return jsonify({"message": f"Erro ao encerrar: {str(e)}"}), 500
 
+        
 @app.route('/status', methods=['GET'])
 @requires_auth
 def status():
