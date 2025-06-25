@@ -418,6 +418,22 @@
             <input type="number" id="maxRepeatTime" value="{{ max_repeat_time }}" min="1">
         </div>
         <div class="form-group">
+            <label for="min_subset_size">Tamanho Mínimo do Subconjunto:</label>
+            <p>Define o valor mínimo para o tamanho dos subconjunto (padrão é 3). (ABC,CDE,DBC) de um (ABCDE)</p>
+            <input type="number" id="min_subset_size" value="{{ min_subset_size }}" min="1">
+        </div>
+        <div class="form-group">
+            <label for="max_subset_size">Tamanho Máximo do Subconjunto:</label>
+            <p>Define o valor máximo para tamanho dos subconjunto (padrão é o total de palavras-chave).</p>
+            <input type="number" id="max_subset_size" value="{{ max_subset_size }}" min="1">
+        </div>
+        <div class="form-group">
+            <label for="send_as_batch">Permitir enviar a cada procura:</label>
+            <p> Torna os envios mais frequentes, ao invés de esperar o ciclo completo.</p>
+            <p> Melhor ativar para tentativas grandes, com muitas opções selecionadas.</p>
+            <input type="checkbox" id="send_as_batch" {{ 'checked' if send_as_batch else '' }}>
+        </div>
+        <div class="form-group">
             <label for="allowKeywordSubsets">Permitir subconjuntos das palavras-chave:</label>
             <p> Cuidado ao usar: com proxy, isso faz mais chamadas e gasta mais créditos. Bom para tentar achar
                 resultados diferentes.</p>
@@ -430,6 +446,7 @@
             <input type="number" id="number_set" value="{{ number_set }}" min="3" oninput="updateSubsetCount()">
             <span id="subsetCount" style="margin-left:10px; font-weight:bold;"></span>
         </div>
+        <!-- BOTÕES -->
         <h2>Controle do monitor de procura </h2>
         <p>Ao trocar valores é bom parar para interromper qualquer busca, e iniciar após. Sem iniciar os valores novos
             não são salvos no servidor. </p>
@@ -485,6 +502,9 @@
         document.addEventListener('DOMContentLoaded', function () {
             updateSubsetCount();
             document.getElementById('keywords').addEventListener('input', updateSubsetCount);
+            document.getElementById('min_subset_size').addEventListener('input', updateSubsetCount);
+            document.getElementById('max_subset_size').addEventListener('input', updateSubsetCount);
+            // Se você quiser atualizar o subset count quando o número de subconjuntos mudar,
             // document.getElementById('number_set').addEventListener('input', updateSubsetCount);
         });
         // --- Fim do subset count script ---
@@ -555,7 +575,10 @@
                 min_repeat_time: document.getElementById('minRepeatTime').value,
                 max_repeat_time: document.getElementById('maxRepeatTime').value,
                 number_set: document.getElementById('number_set').value,
-                allow_subset: document.getElementById('allowKeywordSubsets').checked
+                allow_subset: document.getElementById('allowKeywordSubsets').checked,
+                min_subset_size: document.getElementById('min_subset_size').value,
+                max_subset_size: document.getElementById('max_subset_size').value,
+                send_as_batch: document.getElementById('send_as_batch').checked
             };
 
             fetch('/start', {

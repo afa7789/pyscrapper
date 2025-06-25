@@ -140,6 +140,11 @@ def is_monitor_running():
         return False
     return False
 
+def get_monitor_instance():
+    """Retorna a instância do monitor se estiver disponível"""
+    global monitor
+    return monitor
+
 # --- Autenticação ---
 def check_auth(username, password):
     return username == USERNAME and password == PASSWORD
@@ -198,8 +203,11 @@ def admin():
         min_repeat_time=current_config.get("min_repeat_time", 15),
         max_repeat_time=current_config.get("max_repeat_time", 67),
         allow_keyword_subsets=current_config.get("allow_subset", False),
+        send_as_batch=current_config.get("send_as_batch", True),
         batch_size=current_config.get("batch_size", 1),
         number_set=current_config.get("number_set", 4),
+        min_subset_size=current_config.get("min_subset_size", 3),
+        max_subset_size=current_config.get("max_subset_size", len(DEFAULT_KEYWORDS)),
         username=USERNAME,
         password=PASSWORD
     )
@@ -231,7 +239,10 @@ def start():
             "min_repeat_time": int(data.get('min_repeat_time', 15)),
             "max_repeat_time": int(data.get('max_repeat_time', 67)),
             "allow_subset": data.get('allow_subset', False),
+            "send_as_batch": data.get('send_as_batch', True),
             "batch_size": int(data.get('batch_size', 1)),
+            "min_subset_size": int(data.get('min_subset_size', 3)),
+            "max_subset_size": int(data.get('max_subset_size', len(keywords_list))),
             "number_set": int(data.get('number_set', 4))
         }
         
@@ -260,8 +271,9 @@ def start():
             min_repeat_time=config["min_repeat_time"],
             max_repeat_time=config["max_repeat_time"],
             allow_subset=config["allow_subset"],
-            min_subset_size=3 if len(keywords_list) >= 3 else len(keywords_list),
-            max_subset_size=len(keywords_list)
+            send_as_batch=config["send_as_batch"],
+            min_subset_size=config["min_subset_size"] if len(keywords_list) >= 3 else len(keywords_list),
+            max_subset_size=config["max_subset_size"] if len(keywords_list) < config["max_subset_size"] else len(keywords_list)
         )
         
         if not monitor.start_async():
@@ -453,6 +465,123 @@ def download_hash_file():
     
     get_logger().info("Arquivo hash baixado via /download-hash-file")
     return send_file(hash_file_path, as_attachment=True)
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Endpoint de health check com estatísticas de requests"""
+    try:
+        monitor = get_monitor_instance()
+        
+        if monitor is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'Monitor não inicializado',
+                'stats': None
+            }), 500
+        
+        # Obtém estatísticas do monitor
+        health_stats = monitor.get_health_stats()
+        
+        # Adiciona informações do status do monitor
+        health_stats['monitor_status'] = {
+            'is_running': monitor.is_running,
+            'thread_alive': monitor.thread.is_alive() if monitor.thread else False
+        }
+        
+        # Determina o status geral
+        overall_stats = health_stats['overall']
+        success_rate = overall_stats.get('success_rate', 0)
+        
+        if success_rate >= 80:
+            status = 'healthy'
+        elif success_rate >= 60:
+            status = 'warning'
+        else:
+            status = 'critical'
+        
+        return jsonify({
+            'status': status,
+            'success_rate': success_rate,
+            'message': f'Taxa de sucesso: {success_rate}%',
+            'stats': health_stats
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Erro ao obter estatísticas: {str(e)}',
+            'stats': None
+        }), 500
+
+@app.route('/health/stats', methods=['GET'])
+def detailed_stats():
+    """Endpoint com estatísticas detalhadas"""
+    try:
+        monitor = get_monitor_instance()
+        
+        if monitor is None:
+            return jsonify({
+                'error': 'Monitor não inicializado'
+            }), 500
+        
+        return jsonify(monitor.get_health_stats()), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Erro ao obter estatísticas: {str(e)}'
+        }), 500
+
+@app.route('/health/export', methods=['POST'])
+def export_stats():
+    """Endpoint para exportar estatísticas"""
+    try:
+        monitor = get_monitor_instance()
+        
+        if monitor is None:
+            return jsonify({
+                'error': 'Monitor não inicializado'
+            }), 500
+        
+        # Exporta estatísticas
+        export_file = monitor.stats.export_stats()
+        
+        if export_file:
+            return jsonify({
+                'message': 'Estatísticas exportadas com sucesso',
+                'file': export_file
+            }), 200
+        else:
+            return jsonify({
+                'error': 'Falha ao exportar estatísticas'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'error': f'Erro ao exportar estatísticas: {str(e)}'
+        }), 500
+
+@app.route('/health/reset', methods=['POST'])
+def reset_stats():
+    """Endpoint para resetar estatísticas (use com cuidado!)"""
+    try:
+        monitor = get_monitor_instance()
+        
+        if monitor is None:
+            return jsonify({
+                'error': 'Monitor não inicializado'
+            }), 500
+        
+        # Reseta estatísticas
+        monitor.stats.reset_stats()
+        
+        return jsonify({
+            'message': 'Estatísticas resetadas com sucesso'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Erro ao resetar estatísticas: {str(e)}'
+        }), 500
 
 # Função de limpeza para quando a aplicação é encerrada
 def cleanup():

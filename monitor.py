@@ -7,6 +7,8 @@ import os
 from emoji_sorter import get_random_emoji
 from itertools import combinations
 from logging_config import get_logger
+from request_stats import RequestStats
+
 
 class Monitor:
     def __init__(self,
@@ -19,7 +21,10 @@ class Monitor:
                  retry_attempts=100, min_repeat_time=17,
                  max_repeat_time=65,
                  allow_subset=False,
-                 min_subset_size=2, max_subset_size=None):
+                 min_subset_size=2, max_subset_size=None,
+                 stats_file=None, max_history=1000,
+                 send_as_batch=True
+                 ):
         self.keywords = keywords
         self.negative_keywords_list = negative_keywords_list
         self.scraper = scraper
@@ -30,6 +35,9 @@ class Monitor:
         self.stop_event = threading.Event()
         self.monitoring_interval = monitoring_interval
         self.thread = None
+
+        # Inicializa sistema de estatísticas
+        self.stats = RequestStats(stats_file=stats_file, max_history=max_history)
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
@@ -43,6 +51,8 @@ class Monitor:
         self.batch_size = batch_size
         self.seen_ads = self._load_seen_ads()
 
+        self.send_as_batch = send_as_batch
+
         self.page_depth = page_depth
         self.retry_attempts = retry_attempts
         self.min_repeat_time = min_repeat_time
@@ -53,6 +63,10 @@ class Monitor:
         self.max_subset_size = max_subset_size
         self.allow_subset = allow_subset
         self.logger.info(f"👹 Allowing keyword subsets: {self.allow_subset} (min: {self.min_subset_size}, max: {self.max_subset_size})")
+
+    def get_health_stats(self):
+        """Retorna estatísticas para endpoint /health"""
+        return self.stats.get_stats_summary()
 
     def _hash_ad(self, ad):
         return hashlib.sha256(ad['url'].encode('utf-8')).hexdigest()
@@ -183,11 +197,29 @@ class Monitor:
                     page_retry_delay_max=self.max_repeat_time
                 )
 
+                # Registra sucesso
+                self.stats.record_success(
+                    keywords=current_keywords,
+                    page_num=page_num,
+                    ads_found=len(new_ads_from_page)
+                )
+
                 self.logger.info(f"🏆 Página {page_num} raspada com sucesso para o conjunto {set_idx + 1}. Encontrados {len(new_ads_from_page)} anúncios.")
                 return new_ads_from_page
 
             except Exception as e:
-                self.logger.error(f"❌ Erro na raspagem da página {page_num} (Conjunto {set_idx + 1}, Tentativa {page_attempt}/{self.retry_attempts}): {type(e).__name__} - {str(e)}")
+                error_type = type(e).__name__
+                error_message = str(e)
+                
+                # Registra erro
+                self.stats.record_error(
+                    keywords=current_keywords,
+                    page_num=page_num,
+                    error_type=error_type,
+                    error_message=error_message
+                )
+                
+                self.logger.error(f"❌ Erro na raspagem da página {page_num} (Conjunto {set_idx + 1}, Tentativa {page_attempt}/{self.retry_attempts}): {error_type} - {error_message}")
                 
                 if page_attempt < self.retry_attempts:
                     retry_delay = random.uniform(5, 15)
@@ -343,21 +375,32 @@ class Monitor:
             
             selected_keyword_sets = self._select_keyword_sets()
             
-            current_cycle_new_ads = []
-            for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
-                ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
-                current_cycle_new_ads.extend(ads_from_set)
+            if self.send_as_batch :
+                current_cycle_new_ads = []
+                for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
+                    ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
+                    current_cycle_new_ads.extend(ads_from_set)
+                    
+                    if not self.is_running:
+                        break
                 
                 if not self.is_running:
-                    break
-            
-            if not self.is_running:
-                return False
-            
-            truly_new_ads, truly_new_ads_hash = self._process_new_ads(current_cycle_new_ads)
-            
-            self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
-            
+                    return False
+                
+                truly_new_ads, truly_new_ads_hash = self._process_new_ads(current_cycle_new_ads)
+                
+                self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
+            else:
+                for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
+                    ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
+                    
+                    if not ads_from_set:
+                        continue
+                    
+                    truly_new_ads, truly_new_ads_hash = self._process_new_ads(ads_from_set)
+                    
+                    if truly_new_ads:
+                        self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
         except Exception as e:
             self.logger.error(f"❌ Erro geral durante verificação de ciclo: {str(e)}")
         
