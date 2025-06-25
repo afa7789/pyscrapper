@@ -272,6 +272,9 @@ class Monitor:
             truly_new_ads_hash_list.append(ad_hash)
             truly_new_ads.append(ad)
         
+        if not truly_new_ads:
+            self.logger.info("😿 Nenhum anúncio novo encontrado neste ciclo, acontece!")
+            
         return truly_new_ads, truly_new_ads_hash_list
 
     def _send_new_ads_to_telegram(self, truly_new_ads, truly_new_ads_hash):
