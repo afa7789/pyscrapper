@@ -486,8 +486,8 @@
     <script>
         // Configurações
         const CONFIG = {
-            username: 'admin', // Substitua pelos valores reais
-            password: 'password123', // Substitua pelos valores reais
+            username: '{{ username }}', // Recebido do backend Flask
+            password: '{{ password }}', // Recebido do backend Flask
             refreshInterval: 30000 // 30 segundos
         };
 
