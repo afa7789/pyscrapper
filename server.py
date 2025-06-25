@@ -1,9 +1,9 @@
 from flask import Flask, Response, request, render_template, send_file, jsonify
 from functools import wraps
 import os
+import fcntl
 from dotenv import load_dotenv
 import json
-from threading import Thread
 from monitor import Monitor
 from scraper_cloudflare import MarketRoxoScraperCloudflare
 from telegram_bot import TelegramBot
@@ -24,6 +24,7 @@ load_dotenv()
 # --- Configurações ---
 CONFIG_FILE_PATH = 'config.json'
 LOGS_DIR = 'logs'
+LOCK_FILE = 'monitor.lock'
 
 def load_dynamic_config():
     try:
@@ -72,27 +73,36 @@ PROXIES = {
     "https": os.getenv("HTTPS_PROXY", "")
 }
 
-# Variáveis do monitor
+# Variável do monitor
 monitor = None
-monitor_thread = None
 
-def save_monitor_status(status):
+def acquire_lock():
+    """Tenta adquirir o lock file para garantir uma única instância do monitor"""
     try:
-        with open('monitor_status.json', 'w', encoding='utf-8') as f:
-            json.dump({'is_running': status}, f)
-        get_logger().info(f"Status do monitor salvo: {status}")
-    except Exception as e:
-        get_logger().error(f"Erro ao salvar status do monitor: {e}")
+        lock_file = open(LOCK_FILE, 'w')
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return lock_file
+    except IOError:
+        lock_file.close()
+        return None
 
-def load_monitor_status():
-    try:
-        if os.path.exists('monitor_status.json'):
-            with open('monitor_status.json', 'r', encoding='utf-8') as f:
-                return json.load(f).get('is_running', False)
+def release_lock(lock_file):
+    """Libera o lock file"""
+    if lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        lock_file.close()
+        try:
+            os.remove(LOCK_FILE)
+        except OSError:
+            pass
+
+def is_monitor_running():
+    """Verifica se o monitor está rodando tentando adquirir o lock"""
+    lock_file = acquire_lock()
+    if lock_file:
+        release_lock(lock_file)
         return False
-    except Exception as e:
-        get_logger().error(f"Erro ao carregar status do monitor: {e}")
-        return False
+    return True
 
 # --- Autenticação ---
 def check_auth(username, password):
@@ -161,15 +171,12 @@ def admin():
 @app.route('/start', methods=['POST'])
 @requires_auth
 def start():
-    global monitor, monitor_thread
+    global monitor
     
-    if monitor and monitor_thread and monitor_thread.is_alive():
+    lock_file = acquire_lock()
+    if not lock_file:
         get_logger().info("Tentativa de iniciar monitoramento enquanto já está ativo")
         return {"message": "Monitoramento já está ativo!"}, 400
-    
-    if load_monitor_status():
-        get_logger().warning("Status do monitor indica ativo, mas variáveis globais não confirmam. Resetando status.")
-        save_monitor_status(False)
     
     try:
         data = request.get_json()
@@ -194,7 +201,6 @@ def start():
         keywords_list = [kw.strip() for kw in config["keywords"].split(",") if kw.strip()]
         negative_keywords_list = [kw.strip() for kw in config["negative_keywords_list"].split(",") if kw.strip()]
         
-        # Cria instâncias - as classes usarão o logging centralizado automaticamente
         telegram_bot = TelegramBot(token=config["token"])
         scraper = MarketRoxoScraperCloudflare(
             base_url=BASE_URL,
@@ -219,43 +225,60 @@ def start():
             max_subset_size=len(keywords_list)
         )
         
-        monitor_thread = Thread(target=monitor.start)
-        monitor_thread.daemon = True
-        monitor_thread.start()
-        save_monitor_status(True)
+        if not monitor.start_async():
+            release_lock(lock_file)
+            monitor = None
+            return {"message": "Erro ao iniciar monitoramento: já está ativo"}, 500
         
         get_logger().info(f"Monitoramento iniciado com {len(keywords_list)} palavras-chave")
         return {"message": "Monitoramento iniciado com sucesso!"}, 200
         
     except Exception as e:
-        get_logger().error(f"Erro ao iniciar monitoramento: {e}")
-        return {"message": f"Erro ao iniciar: {e}"}, 500
+        get_logger().error(f"Erro ao iniciar monitoramento: {str(e)}")
+        release_lock(lock_file)
+        monitor = None
+        return {"message": f"Erro ao iniciar: {str(e)}"}, 500
+    finally:
+        # Keep the lock file open until the monitor stops
+        pass
 
 @app.route('/stop', methods=['POST'])
 @requires_auth
 def stop():
-    global monitor, monitor_thread
+    global monitor
+    
+    if not is_monitor_running():
+        get_logger().info("Nenhum monitoramento ativo detectado")
+        return {"message": "Nenhum monitoramento ativo"}, 400
     
     try:
-        is_monitor_active = load_monitor_status() or (monitor and monitor_thread and monitor_thread.is_alive())
-        if is_monitor_active:
-            if monitor and monitor_thread and monitor_thread.is_alive():
-                monitor.stop()
-                monitor_thread.join(timeout=10)
-                if monitor_thread.is_alive():
-                    get_logger().warning("Monitoramento não terminou completamente após timeout")
+        if monitor and monitor.is_running:
+            success = monitor.stop()
+            if success:
+                get_logger().info("Monitoramento encerrado com sucesso")
                 monitor = None
-                monitor_thread = None
-            save_monitor_status(False)
-            get_logger().info("Monitoramento parado com sucesso")
-            return {"message": "Monitoramento parado com sucesso!"}, 200
+                release_lock_file()
+                return {"message": "Monitoramento encerrado com sucesso!"}, 200
+            else:
+                get_logger().warning("Falha ao encerrar monitoramento, mantendo monitor para nova tentativa")
+                return {"message": "Falha ao encerrar monitoramento, tente novamente"}, 500
         else:
-            save_monitor_status(False)
-            get_logger().info("Nenhum monitoramento ativo detectado")
-            return {"message": "Nenhum monitoramento ativo"}, 400
+            get_logger().info("Nenhum monitor local ativo, mas lock file existe")
+            return {"message": "Monitoramento ativo em outro processo, tente novamente"}, 400
     except Exception as e:
-        get_logger().error(f"Erro ao parar monitoramento: {e}")
-        return {"message": f"Erro ao parar: {e}"}, 500
+        get_logger().error(f"Erro ao encerrar monitoramento: {str(e)}")
+        return {"message": f"Erro ao encerrar: {str(e)}"}, 500
+
+def release_lock_file():
+    """Libera o lock file se existir"""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, 'r') as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            os.remove(LOCK_FILE)
+            get_logger().info("Lock file removido com sucesso")
+        except Exception as e:
+            get_logger().error(f"Erro ao remover lock file: {str(e)}")
 
 @app.route('/logs')
 @requires_auth
@@ -270,8 +293,8 @@ def logs():
         get_logger().error("Arquivo de log não encontrado")
         return {"message": "Arquivo de log não encontrado"}, 404
     except Exception as e:
-        get_logger().error(f"Erro ao ler logs: {e}")
-        return {"message": f"Erro ao ler logs: {e}"}, 500
+        get_logger().error(f"Erro ao ler logs: {str(e)}")
+        return {"message": f"Erro ao ler logs: {str(e)}"}, 500
 
 @app.route('/archive_log', methods=['GET'])
 @requires_auth
@@ -302,7 +325,7 @@ def archive_log():
                 logger.info(f"Log rotacionado para {archived_name}")
         return jsonify({"message": "Log arquivado com sucesso"}), 200
     except Exception as e:
-        get_logger().error(f"Erro ao arquivar log: {e}")
+        get_logger().error(f"Erro ao arquivar log: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/download-logs', methods=['GET'])
@@ -327,8 +350,8 @@ def download_logs():
         return send_file(mem_zip, mimetype='application/zip', 
                         as_attachment=True, download_name='all_logs.zip')
     except Exception as e:
-        get_logger().error(f"Erro ao baixar logs: {e}")
-        return {"message": f"Erro ao baixar logs: {e}"}, 500
+        get_logger().error(f"Erro ao baixar logs: {str(e)}")
+        return {"message": f"Erro ao baixar logs: {str(e)}"}, 500
 
 @app.route('/download-hash-file', methods=['GET'])
 @requires_auth
@@ -344,6 +367,5 @@ def download_hash_file():
     return send_file(hash_file_path, as_attachment=True)
 
 if __name__ == '__main__':
-    save_monitor_status(False)
     get_logger().info("Aplicação iniciada - Market Roxo Monitor")
     app.run(debug=False, host='0.0.0.0', port=5000, threaded=False, processes=1)

@@ -26,9 +26,10 @@ class Monitor:
         self.telegram_bot = telegram_bot
         self.chat_id = chat_id
         self.logger = get_logger()
-        self.running = False
+        self.is_running = False
         self.stop_event = threading.Event()
         self.monitoring_interval = monitoring_interval
+        self.thread = None
 
         # Use home directory for the hash file if not specified
         if hash_file is None:
@@ -127,7 +128,7 @@ class Monitor:
 
         for i in range(0, seconds_until_6am, 10):
             if self.stop_event.is_set():
-                self.running = False
+                self.is_running = False
                 self.logger.info("🛑 Loop interrompido durante espera fora do horário por stop_event")
                 return False
             
@@ -162,7 +163,7 @@ class Monitor:
         page_attempt = 0
         while page_attempt < self.retry_attempts:
             if self.stop_event.is_set():
-                self.running = False
+                self.is_running = False
                 self.logger.info("🛑 Monitoramento interrompido durante raspagem de página por stop_event.")
                 return None
             
@@ -191,7 +192,7 @@ class Monitor:
                 if page_attempt < self.retry_attempts:
                     retry_delay = random.uniform(5, 15)
                     if self.stop_event.wait(timeout=retry_delay):
-                        self.running = False
+                        self.is_running = False
                         self.logger.info("🛑 Monitoramento interrompido durante espera de retry por stop_event.")
                         return None
                 else:
@@ -216,7 +217,7 @@ class Monitor:
             
             ads_from_set.extend(new_ads_from_page)
             
-            if not self.running:
+            if not self.is_running:
                 break
         
         return ads_from_set
@@ -282,7 +283,7 @@ class Monitor:
             successfully_sent_count = 0
             
             for msg_idx, msg in enumerate(messages):
-                if not self.running:
+                if not self.is_running:
                     self.logger.info("🛑 Monitoramento interrompido antes de enviar todas as mensagens.")
                     break
                 
@@ -295,11 +296,11 @@ class Monitor:
                     continue
                 
                 if self.stop_event.wait(timeout=1):
-                    self.running = False
+                    self.is_running = False
                     self.logger.info("🛑 Monitoramento interrompido durante o envio de mensagens.")
                     break
             
-            if self.running and successfully_sent_count > 0:
+            if self.is_running and successfully_sent_count > 0:
                 hashes_to_save = truly_new_ads_hash[:successfully_sent_count]
                 for ad_hash in hashes_to_save:
                     if ad_hash not in self.seen_ads:
@@ -318,7 +319,7 @@ class Monitor:
 
         for i in range(0, seconds_to_wait, 10):
             if self.stop_event.is_set():
-                self.running = False
+                self.is_running = False
                 self.logger.info("🛑 Monitoramento interrompido durante espera do ciclo por stop_event.")
                 return False
             self.stop_event.wait(timeout=10)
@@ -332,7 +333,7 @@ class Monitor:
         try:
             within_hours, current_time_gmt3 = self._is_within_operating_hours()
             
-            self.logger.info(f"🔄 Estado do loop: running={self.running}, hora atual={current_time_gmt3.strftime('%H:%M:%S')}")
+            self.logger.info(f"🔄 Estado do loop: running={self.is_running}, hora atual={current_time_gmt3.strftime('%H:%M:%S')}")
             
             if not within_hours:
                 return self._wait_for_operating_hours(current_time_gmt3)
@@ -347,10 +348,10 @@ class Monitor:
                 ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
                 current_cycle_new_ads.extend(ads_from_set)
                 
-                if not self.running:
+                if not self.is_running:
                     break
             
-            if not self.running:
+            if not self.is_running:
                 return False
             
             truly_new_ads, truly_new_ads_hash = self._process_new_ads(current_cycle_new_ads)
@@ -367,14 +368,14 @@ class Monitor:
         return True
 
     def start(self):
-        """Função principal do monitoramento"""
-        self.running = True
+        """Função principal do monitoramento (síncrona)"""
+        self.is_running = True
         self.stop_event.clear()
         self.logger.info("🦉 Monitoramento iniciado!")
 
         cycle_count = 0
 
-        while self.running:
+        while self.is_running:
             cycle_count += 1
             
             if not self._run_monitoring_cycle(cycle_count):
@@ -383,7 +384,38 @@ class Monitor:
             if not self._wait_for_next_cycle():
                 break
 
+        self.is_running = False
         self.logger.info("Monitoramento finalizado.")
+
+    def start_async(self):
+        """Inicia o monitoramento em uma thread separada"""
+        if self.is_running:
+            self.logger.warning("Tentativa de iniciar monitoramento já ativo")
+            return False
+        self.thread = threading.Thread(target=self.start, daemon=True)
+        self.thread.start()
+        self.logger.info("Monitoramento iniciado em thread separada")
+        return True
+
+    def stop(self):
+        """Para o monitoramento e retorna se foi bem-sucedido"""
+        if not self.is_running:
+            self.logger.info("Monitoramento já está parado")
+            return True
+        
+        self.logger.info("🛑 Comando de parada enviado...")
+        self.stop_event.set()
+        
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=10)
+            if self.thread.is_alive():
+                self.logger.warning("Monitoramento não terminou completamente após timeout")
+                return False
+        
+        self.is_running = False
+        self.thread = None
+        self.logger.info("Monitoramento parado com sucesso")
+        return True
 
     def _split_message(self, ads):
         messages = []
@@ -397,8 +429,3 @@ class Monitor:
             message_content = "\n\n".join(batch)
             messages.append(message_header + message_content)
         return messages
-
-    def stop(self):
-        self.running = False
-        self.stop_event.set()
-        self.logger.info("🛑 Comando de parada enviado...")
