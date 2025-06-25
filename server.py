@@ -10,7 +10,7 @@ from telegram_bot import TelegramBot
 import zipfile
 import io
 from datetime import datetime, timezone, timedelta
-from logging_config import get_logger, setup_logging
+from logging_config import get_logger, setup_logging, GMT3Formatter
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 app = Flask(__name__, template_folder='template')
