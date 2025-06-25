@@ -191,9 +191,13 @@ def home():
 def admin():
     current_config = load_dynamic_config()
     
+    # Parse keywords first to get the correct length
+    keywords_str = current_config.get('keywords', DEFAULT_KEYWORDS)
+    keywords_list = [kw.strip() for kw in keywords_str.split(",") if kw.strip()]
+
     return render_template(
         'admin.html',
-        keywords_list=current_config.get("keywords", DEFAULT_KEYWORDS),
+        keywords_list=keywords_str,
         negative_keywords_list=current_config.get("negative_keywords_list", NEGATIVE_KEYWORDS),
         token=current_config.get("token", TELEGRAM_TOKEN),
         chat_input=current_config.get("chat_input", CHAT_INPUT),
@@ -207,10 +211,16 @@ def admin():
         batch_size=current_config.get("batch_size", 1),
         number_set=current_config.get("number_set", 4),
         min_subset_size=current_config.get("min_subset_size", 3),
-        max_subset_size=current_config.get("max_subset_size", len(DEFAULT_KEYWORDS)),
+        max_subset_size=current_config.get("max_subset_size", len(keywords_list)),
         username=USERNAME,
         password=PASSWORD
     )
+
+@app.route('/health-dashboard')
+@requires_auth
+def health_dashboard():
+    """Página de dashboard de saúde"""
+    return render_template('health.html', username=USERNAME, password=PASSWORD)
 
 @app.route('/start', methods=['POST'])
 @requires_auth
@@ -228,8 +238,12 @@ def start():
     try:
         data = request.get_json()
         
+        # Parse keywords first to get the correct length
+        keywords_str = data.get('keywords_list', DEFAULT_KEYWORDS)
+        keywords_list = [kw.strip() for kw in keywords_str.split(",") if kw.strip()]
+        
         config = {
-            "keywords": data.get('keywords_list', DEFAULT_KEYWORDS),
+            "keywords": keywords_str,
             "negative_keywords_list": data.get('negative_keywords_list', NEGATIVE_KEYWORDS),
             "token": data.get('token', TELEGRAM_TOKEN),
             "chat_input": data.get('chat_input', CHAT_INPUT),
@@ -247,8 +261,6 @@ def start():
         }
         
         save_dynamic_config(config)
-        
-        keywords_list = [kw.strip() for kw in config["keywords"].split(",") if kw.strip()]
         negative_keywords_list = [kw.strip() for kw in config["negative_keywords_list"].split(",") if kw.strip()]
         
         telegram_bot = TelegramBot(token=config["token"])
@@ -273,7 +285,7 @@ def start():
             allow_subset=config["allow_subset"],
             send_as_batch=config["send_as_batch"],
             min_subset_size=config["min_subset_size"] if len(keywords_list) >= 3 else len(keywords_list),
-            max_subset_size=config["max_subset_size"] if len(keywords_list) < config["max_subset_size"] else len(keywords_list)
+            max_subset_size=config["max_subset_size"] if config["max_subset_size"] <= len(keywords_list) else len(keywords_list)
         )
         
         if not monitor.start_async():
@@ -467,6 +479,7 @@ def download_hash_file():
     return send_file(hash_file_path, as_attachment=True)
 
 @app.route('/health', methods=['GET'])
+@requires_auth
 def health_check():
     """Endpoint de health check com estatísticas de requests"""
     try:
@@ -514,6 +527,7 @@ def health_check():
         }), 500
 
 @app.route('/health/stats', methods=['GET'])
+@requires_auth
 def detailed_stats():
     """Endpoint com estatísticas detalhadas"""
     try:
@@ -532,6 +546,7 @@ def detailed_stats():
         }), 500
 
 @app.route('/health/export', methods=['POST'])
+@requires_auth
 def export_stats():
     """Endpoint para exportar estatísticas"""
     try:
@@ -561,6 +576,7 @@ def export_stats():
         }), 500
 
 @app.route('/health/reset', methods=['POST'])
+@requires_auth
 def reset_stats():
     """Endpoint para resetar estatísticas (use com cuidado!)"""
     try:

@@ -168,6 +168,15 @@
             background-color: #5a3e36;
         }
 
+        #healthDashboardBtn {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        #healthDashboardBtn:hover {
+            background-color: #138a9c;
+        }
+
         /* Quebra de linha para botões menores em mobile */
         .button-group-bottom {
             /* Adicione uma div com essa classe em torno dos três botões de baixo */
@@ -460,6 +469,8 @@
             Arquivar Log Atual</button>
         <button id="downloadLogsBtn" style="background-color:#6d4c41;color:white;"
             onclick="window.open('/download-logs','_blank')">📦 Baixar Todos Logs</button>
+        <button id="healthDashboardBtn" style="background-color:#17a2b8;color:white;"
+            onclick="window.open('/health-dashboard','_blank')">🏥 Monitor de Saúde</button>
         <br>
         <span id="autoUpdateStatus" class="status">Carregando logs...</span>
         <div class="log-header">Logs do Sistema (Atualização Automática)</div>
@@ -489,13 +500,27 @@
             document.getElementById('subsetCount').textContent = '';
             return;
             }
-            const minSubsetSize = n >= 3 ? 3 : n;
+            
+            // Get user-defined min and max subset sizes
+            const userMinSubsetSize = parseInt(document.getElementById('min_subset_size').value) || 1;
+            const userMaxSubsetSize = parseInt(document.getElementById('max_subset_size').value) || n;
+            
+            // Calculate actual min and max considering constraints
+            // Minimum cannot be less than 1 or greater than total keywords
+            const minSubsetSize = Math.max(1, Math.min(userMinSubsetSize, n));
+            // Maximum cannot be less than minimum or greater than total keywords
+            const maxSubsetSize = Math.max(minSubsetSize, Math.min(userMaxSubsetSize, n));
+            
+            // Update the input fields to reflect the constrained values
+            document.getElementById('min_subset_size').value = minSubsetSize;
+            document.getElementById('max_subset_size').value = maxSubsetSize;
+            
             let totalSubsets = 0;
-            for (let i = minSubsetSize; i <= n; i++) {
+            for (let i = minSubsetSize; i <= maxSubsetSize; i++) {
             totalSubsets += comb(n, i);
             }
             document.getElementById('subsetCount').textContent =
-            'Subconjuntos (' + minSubsetSize + ' a ' + n + '): ' + totalSubsets;
+            'Subconjuntos (' + minSubsetSize + ' a ' + maxSubsetSize + '): ' + totalSubsets + ' (Total palavras: ' + n + ')';
         }
 
         // Inicialização ao carregar a página e sempre que keywords ou number_set mudarem
