@@ -371,7 +371,7 @@
         <h1>Painel de Procura do MarketRoxo</h1>
         <div class="form-group">
             <label for="keywords">Palavras-chave (separadas por vírgula):</label>
-            <input type="text" id="keywords" value="{{ keywords_list }}">
+            <input type="text" id="keywords" value="{{ keywords_list }}" oninput="updateSubsetCount()">
         </div>
         <div class="form-group">
             <label for="negativeKeywords">Palavras-chave negativas (separadas por vírgula):</label>
@@ -427,7 +427,8 @@
             <label for="number_set">Quantos SubConjuntos:</label>
             <p>Subconjuntos é o número de combinações das palavras chaves, p/ tentar achar anuncios diferentes, minimo 3.</p>
             <p>Em um conjunto (A,B,C), os subconjuntos são: (ABC, BC, AB, AC,A,B,C), ele vai sortear X subconjuntos p/ usar. </p>
-            <input type="number" id="number_set" value="{{ number_set }}" min="3">
+            <input type="number" id="number_set" value="{{ number_set }}" min="3" oninput="updateSubsetCount()">
+            <span id="subsetCount" style="margin-left:10px; font-weight:bold;"></span>
         </div>
         <h2>Controle do monitor de procura </h2>
         <p>Ao trocar valores é bom parar para interromper qualquer busca, e iniciar após. Sem iniciar os valores novos
@@ -449,6 +450,46 @@
         <pre id="logOutput">Carregando logs...</pre>
     </div>
     <script>
+
+        // --- Subset count script ---
+        function comb(n, k) {
+            if (k > n) return 0;
+            let num = 1, denom = 1;
+            for (let i = 1; i <= k; i++) {
+                num *= (n - i + 1);
+                denom *= i;
+            }
+            return num / denom;
+        }
+
+        function updateSubsetCount() {
+            // Use keywords from the keywords input
+            const rawKeywords = document.getElementById('keywords').value;
+            const keywords = rawKeywords.split(',')
+                .map(kw => kw.trim())
+                .filter(kw => kw.length);
+            const n = keywords.length;
+            if (n === 0) {
+                document.getElementById('subsetCount').textContent = '';
+                return;
+            }
+            const minSubsetSize = Math.max(2, Math.floor(n / 2));
+            let totalSubsets = 0;
+            for (let i = minSubsetSize; i <= n; i++) {
+                totalSubsets += comb(n, i);
+            }
+            document.getElementById('subsetCount').textContent =
+                'Subconjuntos (' + minSubsetSize + ' a ' + n + '): ' + totalSubsets;
+        }
+
+        // Inicialização ao carregar a página e sempre que keywords ou number_set mudarem
+        document.addEventListener('DOMContentLoaded', function () {
+            updateSubsetCount();
+            document.getElementById('keywords').addEventListener('input', updateSubsetCount);
+            // document.getElementById('number_set').addEventListener('input', updateSubsetCount);
+        });
+        // --- Fim do subset count script ---
+
         let logUpdateInterval = null;
 
         // Função para iniciar atualização automática dos logs
