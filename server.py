@@ -80,6 +80,7 @@ def save_monitor_status(status):
     try:
         with open('monitor_status.json', 'w', encoding='utf-8') as f:
             json.dump({'is_running': status}, f)
+        get_logger().info(f"Status do monitor salvo: {status}")
     except Exception as e:
         get_logger().error(f"Erro ao salvar status do monitor: {e}")
 
@@ -112,7 +113,7 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# Função para ser chamada após o fork de cada worker no Gunicorn
+# Função para ser chamada após o fork de cada worker no servidor
 def post_fork(server, worker):
     """Configura o logging em cada worker após o fork"""
     setup_logging()
@@ -163,9 +164,11 @@ def start():
     global monitor, monitor_thread
     
     if monitor and monitor_thread and monitor_thread.is_alive():
+        get_logger().info("Tentativa de iniciar monitoramento enquanto já está ativo")
         return {"message": "Monitoramento já está ativo!"}, 400
     
     if load_monitor_status():
+        get_logger().warning("Status do monitor indica ativo, mas variáveis globais não confirmam. Resetando status.")
         save_monitor_status(False)
     
     try:
@@ -234,17 +237,21 @@ def stop():
     global monitor, monitor_thread
     
     try:
-        if monitor or monitor_thread or monitor_thread.is_alive():
-            monitor.stop()
-            monitor_thread.join(timeout=10)
-            monitor = None
-            monitor_thread = None
+        is_monitor_active = load_monitor_status() or (monitor and monitor_thread and monitor_thread.is_alive())
+        if is_monitor_active:
+            if monitor and monitor_thread and monitor_thread.is_alive():
+                monitor.stop()
+                monitor_thread.join(timeout=10)
+                if monitor_thread.is_alive():
+                    get_logger().warning("Monitoramento não terminou completamente após timeout")
+                monitor = None
+                monitor_thread = None
             save_monitor_status(False)
             get_logger().info("Monitoramento parado com sucesso")
             return {"message": "Monitoramento parado com sucesso!"}, 200
         else:
             save_monitor_status(False)
-            get_logger().info("Nenhum monitoramento ativo")
+            get_logger().info("Nenhum monitoramento ativo detectado")
             return {"message": "Nenhum monitoramento ativo"}, 400
     except Exception as e:
         get_logger().error(f"Erro ao parar monitoramento: {e}")
@@ -321,7 +328,7 @@ def download_logs():
                         as_attachment=True, download_name='all_logs.zip')
     except Exception as e:
         get_logger().error(f"Erro ao baixar logs: {e}")
-        return jsonify({'message': f'Erro ao baixar logs: {e}'}), 500
+        return {"message": f"Erro ao baixar logs: {e}"}, 500
 
 @app.route('/download-hash-file', methods=['GET'])
 @requires_auth
