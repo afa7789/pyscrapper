@@ -437,9 +437,11 @@
             <input type="number" id="max_subset_size" value="{{ max_subset_size }}" min="1">
         </div>
         <div class="form-group">
-            <label for="send_as_batch">Permitir enviar a cada procura:</label>
-            <p> Torna os envios mais frequentes, ao invés de esperar o ciclo completo.</p>
-            <p> Melhor ativar para tentativas grandes, com muitas opções selecionadas.</p>
+            <label for="send_as_batch">Envio em conjunto de procura:</label>
+            <p> Ao desativar torna os envios mais frequentes, ao invés de esperar o ciclo completo.</p>
+            <p> Melhor desativar para tentativas grandes, com muitas opções selecionadas.</p>
+            <p> O benefício de enviar tudo em grupo, é receber tudo de uma vez ao invéz de esparço.</p>
+            <p> Vai de gosto pessoal isso.</p>
             <input type="checkbox" id="send_as_batch" {{ 'checked' if send_as_batch else '' }}>
         </div>
         <div class="form-group">
