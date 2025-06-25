@@ -244,6 +244,7 @@ def stop():
             return {"message": "Monitoramento parado com sucesso!"}, 200
         else:
             save_monitor_status(False)
+            get_logger().info("Nenhum monitoramento ativo")
             return {"message": "Nenhum monitoramento ativo"}, 400
     except Exception as e:
         get_logger().error(f"Erro ao parar monitoramento: {e}")
