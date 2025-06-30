@@ -229,46 +229,88 @@ def force_log_rotation():
         return False
     
     rotated = False
-    for handler in logger.handlers[:]:  # Copia lista para evitar modificação durante iteração
+    # Cria uma cópia da lista de handlers para evitar modificação durante iteração
+    handlers = logger.handlers[:]
+    # Remove todos os handlers existentes para evitar duplicatas
+    for handler in handlers:
+        logger.removeHandler(handler)
         if isinstance(handler, (ConcurrentRotatingFileHandler, CustomTimedRotatingFileHandler)):
             try:
-                # Fecha o handler atual
+                # Força flush e fecha o handler
+                handler.flush()
                 handler.close()
-                # Renomeia o arquivo de log atual, se existir
-                if os.path.exists(log_file_path):
-                    archived_name = f"{log_file_path}.{timestamp}"
-                    os.rename(log_file_path, archived_name)
-                    logger.info(f"🔄 Log rotacionado para {archived_name}")
-                # Cria um novo arquivo de log vazio
-                open(log_file_path, 'a').close()
-                # Cria um novo handler com a mesma configuração
-                if isinstance(handler, ConcurrentRotatingFileHandler):
-                    new_handler = ConcurrentRotatingFileHandler(
-                        log_file_path,
-                        maxBytes=handler.maxBytes,
-                        backupCount=handler.backupCount,
-                        encoding='utf-8'
-                    )
-                else:  # CustomTimedRotatingFileHandler
-                    new_handler = CustomTimedRotatingFileHandler(
-                        log_file_path,
-                        when=handler.when,
-                        interval=handler.interval,
-                        backupCount=handler.backupCount,
-                        encoding='utf-8'
-                    )
-                new_handler.setFormatter(handler.formatter)
-                logger.removeHandler(handler)
-                logger.addHandler(new_handler)
-                rotated = True
             except Exception as e:
-                logger.error(f"Erro ao forçar rotação: {e}")
-                return False
+                logger.error(f"Erro ao fechar handler: {e}")
     
-    if not rotated:
-        logger.warning("Nenhum handler de arquivo encontrado para rotação")
-    return rotated
-
+    # Renomeia o arquivo de log atual, se existir
+    try:
+        if os.path.exists(log_file_path):
+            archived_name = f"{log_file_path}.{timestamp}"
+            os.rename(log_file_path, archived_name)
+            logger.info(f"🔄 Log rotacionado para {archived_name}")
+        # Cria um novo arquivo de log vazio
+        open(log_file_path, 'a').close()
+        rotated = True
+    except Exception as e:
+        logger.error(f"Erro ao renomear ou criar novo arquivo de log: {e}")
+        # Re-adiciona um handler de console temporário se a rotação falhar
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter(
+            '[%(asctime)s] %(message)s',
+            datefmt='%H:%M:%S'
+        ))
+        logger.addHandler(console_handler)
+        return False
+    
+    # Cria um novo handler com a configuração apropriada
+    try:
+        # Determina o tipo de handler com base na configuração anterior
+        for handler in handlers:
+            if isinstance(handler, ConcurrentRotatingFileHandler):
+                new_handler = ConcurrentRotatingFileHandler(
+                    log_file_path,
+                    maxBytes=handler.maxBytes,
+                    backupCount=handler.backupCount,
+                    encoding='utf-8'
+                )
+                new_handler.setFormatter(handler.formatter)
+                logger.addHandler(new_handler)
+                break
+            elif isinstance(handler, CustomTimedRotatingFileHandler):
+                new_handler = CustomTimedRotatingFileHandler(
+                    log_file_path,
+                    when=handler.when Declare a variável `when` para evitar conflito com a palavra-chave.
+                    interval=handler.interval,
+                    backupCount=handler.backupCount,
+                    encoding='utf-8'
+                )
+                new_handler.setFormatter(handler.formatter)
+                logger.addHandler(new_handler)
+                break
+        else:
+            # Configura um handler padrão se não houver correspondência
+            new_handler = ConcurrentRotatingFileHandler(
+                log_file_path,
+                maxBytes=10 * 1024 * 1024,  # 10MB padrão
+                backupCount=20,
+                encoding='utf-8'
+            )
+            new_handler.setFormatter(GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s'))
+            logger.addHandler(new_handler)
+        
+        logger.info("🔄 Novo handler de log configurado após rotação")
+        return rotated
+    except Exception as e:
+        logger.error(f"Erro ao configurar novo handler: {e}")
+        # Re-adiciona um handler de console em caso de erro
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter(
+            '[%(asctime)s] %(message)s',
+            datefmt='%H:%M:%S'
+        ))
+        logger.addHandler(console_handler)
+        return False
+        
 def cleanup_on_exit():
     """Função para limpar recursos na saída"""
     global _rotation_manager
