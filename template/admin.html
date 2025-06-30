@@ -66,7 +66,8 @@
 
         input[type="text"],
         input[type="number"],
-        input[type="password"] {
+        input[type="password"],
+        textarea {
             width: 100%;
             padding: 12px 15px;
             /* Aumenta o padding interno, especialmente lateral */
@@ -76,11 +77,16 @@
             border-radius: 6px;
             /* Bordas levemente mais arredondadas */
             transition: border-color 0.3s, box-shadow 0.3s;
+            resize: vertical;
+            /* Allow only vertical resizing for textarea */
+            min-height: 48px;
+            /* Minimum height to match other inputs */
         }
 
         input[type="text"]:focus,
         input[type="number"]:focus,
-        input[type="password"]:focus {
+        input[type="password"]:focus,
+        textarea:focus {
             border-color: #007bff;
             box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
             /* Adiciona um brilho ao focar */
@@ -275,7 +281,8 @@
             /* Aumenta significativamente o padding e a fonte dos inputs para celular */
             input[type="text"],
             input[type="number"],
-            input[type="password"] {
+            input[type="password"],
+            textarea {
                 padding: 16px 12px;
                 /* Padding maior para facilitar o toque */
                 font-size: 1.15em;
@@ -285,6 +292,8 @@
                 appearance: none;
                 border-radius: 4px;
                 /* Mantém um pequeno arredondamento */
+                min-height: 52px;
+                /* Slightly larger minimum height for mobile */
             }
 
             .form-group p {
@@ -356,10 +365,12 @@
 
             input[type="text"],
             input[type="number"],
-            input[type="password"] {
+            input[type="password"],
+            textarea {
                 padding: 14px 10px;
                 /* Padding ligeiramente menor para inputs */
                 font-size: 1.1em;
+                min-height: 48px;
             }
 
             button {
