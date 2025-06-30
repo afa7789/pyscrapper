@@ -286,4 +286,3 @@ def log_warning(message):
     get_logger().warning(message)
 
 atexit.register(cleanup_on_exit)
-```
