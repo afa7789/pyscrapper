@@ -186,9 +186,9 @@ def requires_auth(f):
 # Função para ser chamada após o fork de cada worker no servidor
 def post_fork(server, worker):
     """Configura o logging em cada worker após o fork"""
-    setup_logging()
+    setup_4hour_rotation()
     get_logger().info(f"Worker {worker.pid} inicializado com logging configurado")
-
+    
 # --- Rotas ---
 @app.route('/')
 def home():
@@ -486,13 +486,13 @@ def status():
 def logs():
     try:
         log_file_path = os.path.join(LOGS_DIR, 'app.log')
+        if not os.path.exists(log_file_path):
+            get_logger().error("Arquivo de log não encontrado")
+            return jsonify({"message": "Arquivo de log não encontrado"}), 404
         with open(log_file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         get_logger().debug("Logs acessados via /logs")
         return Response(content, mimetype='text/plain')
-    except FileNotFoundError:
-        get_logger().error("Arquivo de log não encontrado")
-        return jsonify({"message": "Arquivo de log não encontrado"}), 404
     except Exception as e:
         get_logger().error(f"Erro ao ler logs: {str(e)}")
         return jsonify({"message": f"Erro ao ler logs: {str(e)}"}), 500
