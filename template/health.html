@@ -3,847 +3,293 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor de Saúde - Market Roxo</title>
+    <title>Health Dashboard - Market Roxo</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        body { 
+            font-family: monospace; 
+            background: white; 
+            color: black; 
+            margin: 20px; 
+            font-size: 14px;
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #333;
+        pre { 
+            background: #f5f5f5; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            margin: 10px 0; 
         }
-
-        .dashboard {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: grid;
-            gap: 20px;
-            grid-template-areas: 
-                "header header header header"
-                "status status status status"
-                "controls controls controls controls"
-                "stats stats monitor logs";
-            grid-template-columns: repeat(4, 1fr);
-            grid-template-rows: auto auto auto 1fr;
+        button { 
+            margin: 5px; 
+            padding: 5px 10px; 
+            font-family: monospace; 
         }
-
-        .header {
-            grid-area: header;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 1.1rem;
-        }
-
-        .status-overview {
-            grid-area: status;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-        }
-
-        .status-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .status-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--card-color, #28a745), transparent);
-        }
-
-        .status-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-
-        .status-card.healthy { --card-color: #28a745; }
-        .status-card.warning { --card-color: #ffc107; }
-        .status-card.critical { --card-color: #dc3545; }
-        .status-card.unknown { --card-color: #6c757d; }
-
-        .status-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-        }
-
-        .status-card h3 {
-            font-size: 1.1rem;
-            color: #555;
-            font-weight: 600;
-        }
-
-        .status-icon {
-            font-size: 1.5rem;
-        }
-
-        .status-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: var(--card-color, #333);
-        }
-
-        .status-description {
-            color: #666;
-            font-size: 0.9rem;
-        }
-
-        .controls {
-            grid-area: controls;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        .controls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 0.95rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #007bff, #0056b3);
-            color: white;
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #28a745, #1e7e34);
-            color: white;
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, #ffc107, #e0a800);
-            color: #212529;
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #dc3545, #c82333);
-            color: white;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .stats-panel {
-            grid-area: stats;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .monitor-panel {
-            grid-area: monitor;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .logs-panel {
-            grid-area: logs;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .panel h2 {
-            font-size: 1.3rem;
-            margin-bottom: 20px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .stats-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-
-        .stats-table th,
-        .stats-table td {
-            padding: 8px 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-
-        .stats-table th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #555;
-        }
-
-        .stats-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .metric-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        .metric-label {
-            color: #666;
-            font-size: 0.9rem;
-        }
-
-        .metric-value {
-            font-weight: 600;
-            color: #333;
-        }
-
-        .log-entry {
-            font-family: 'Courier New', monospace;
-            font-size: 0.8rem;
-            padding: 4px 8px;
-            margin: 2px 0;
-            border-radius: 4px;
-            background: #f8f9fa;
-            color: #333;
-        }
-
-        .log-entry.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .log-entry.warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .log-entry.info {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            color: #666;
-        }
-
-        .spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-        }
-
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .timestamp {
-            text-align: center;
-            color: #666;
-            font-size: 0.8rem;
-            margin-top: 20px;
-            opacity: 0.8;
-        }
-
-        @media (max-width: 1200px) {
-            .dashboard {
-                grid-template-areas: 
-                    "header header"
-                    "status status"
-                    "controls controls"
-                    "stats monitor"
-                    "logs logs";
-                grid-template-columns: 1fr 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .dashboard {
-                grid-template-areas: 
-                    "header"
-                    "status"
-                    "controls"
-                    "stats"
-                    "monitor"
-                    "logs";
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-
-            .header h1 {
-                font-size: 2rem;
-            }
-
-            .status-overview {
-                grid-template-columns: 1fr;
-            }
-
-            .controls-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+        .error { color: red; }
+        .warning { color: orange; }
+        .success { color: green; }
+        hr { margin: 20px 0; }
     </style>
 </head>
 <body>
-    <div class="dashboard">
-        <!-- Header -->
-        <div class="header">
-            <h1>🏥 Monitor de Saúde</h1>
-            <p>Dashboard em tempo real do Market Roxo Monitor</p>
-        </div>
-
-        <!-- Status Overview -->
-        <div class="status-overview">
-            <div class="status-card unknown" id="general-status">
-                <div class="status-card-header">
-                    <h3>Status Geral</h3>
-                    <span class="status-icon">🔍</span>
-                </div>
-                <div class="status-value">-</div>
-                <div class="status-description">Carregando...</div>
-            </div>
-
-            <div class="status-card unknown" id="monitor-status">
-                <div class="status-card-header">
-                    <h3>Monitor</h3>
-                    <span class="status-icon">⚙️</span>
-                </div>
-                <div class="status-value">-</div>
-                <div class="status-description">Verificando status...</div>
-            </div>
-
-            <div class="status-card unknown" id="success-rate">
-                <div class="status-card-header">
-                    <h3>Taxa de Sucesso</h3>
-                    <span class="status-icon">📊</span>
-                </div>
-                <div class="status-value">-</div>
-                <div class="status-description">Calculando...</div>
-            </div>
-
-            <div class="status-card unknown" id="uptime-card">
-                <div class="status-card-header">
-                    <h3>Uptime</h3>
-                    <span class="status-icon">⏱️</span>
-                </div>
-                <div class="status-value">-</div>
-                <div class="status-description">Tempo de execução</div>
-            </div>
-        </div>
-
-        <!-- Controls -->
-        <div class="controls">
-            <div id="alert-container"></div>
-            <div class="controls-grid">
-                <button class="btn btn-primary" onclick="refreshData()">
-                    🔄 Atualizar
-                </button>
-                <button class="btn btn-success" onclick="downloadStats()">
-                    📥 Baixar Stats
-                </button>
-                <button class="btn btn-warning" onclick="exportStats()">
-                    📤 Exportar
-                </button>
-                <button class="btn btn-danger" onclick="resetStats()">
-                    🗑️ Reset Stats
-                </button>
-            </div>
-        </div>
-
-        <!-- Statistics Panel -->
-        <div class="stats-panel">
-            <h2>📈 Estatísticas</h2>
-            <div id="stats-content">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    Carregando estatísticas...
-                </div>
-            </div>
-        </div>
-
-        <!-- Monitor Panel -->
-        <div class="monitor-panel">
-            <h2>⚙️ Monitor Info</h2>
-            <div id="monitor-content">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    Carregando informações...
-                </div>
-            </div>
-        </div>
-
-        <!-- Logs Panel -->
-        <div class="logs-panel">
-            <h2>📝 Logs Recentes</h2>
-            <div id="logs-content">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    Carregando logs...
-                </div>
-            </div>
-        </div>
+    <h1>Market Roxo - Health Dashboard</h1>
+    <p>Última atualização: <span id="lastUpdate">Carregando...</span></p>
+    <p>Status: <span id="systemStatus">Verificando...</span></p>
+    
+    <hr>
+    
+    <h2>Estatísticas Gerais</h2>
+    <div id="overallStats">
+        <p>Total de requests: <span id="totalRequests">-</span></p>
+        <p>Sucessos: <span id="successCount">-</span></p>
+        <p>Erros: <span id="errorCount">-</span></p>
+        <p>Taxa de sucesso: <span id="successRate">-</span>%</p>
+        <p>Histórico (últimos): <span id="historySize">-</span> / <span id="maxHistory">-</span></p>
     </div>
-
-    <div class="timestamp" id="last-update"></div>
+    
+    <hr>
+    
+    <h2>Status do Monitor</h2>
+    <div id="monitorStatus">
+        <p>Monitor rodando: <span id="isRunning">-</span></p>
+        <p>Thread ativa: <span id="threadAlive">-</span></p>
+    </div>
+    
+    <hr>
+    
+    <h2>Estatísticas por Palavra-chave</h2>
+    <div id="keywordStats">
+        <pre id="keywordData">Carregando...</pre>
+    </div>
+    
+    <hr>
+    
+    <h2>Últimos Erros</h2>
+    <div id="recentErrors">
+        <pre id="errorData">Carregando...</pre>
+    </div>
+    
+    <hr>
+    
+    <h2>Ações</h2>
+    <button onclick="forceUpdate()">Atualizar Agora</button>
+    <button onclick="downloadStats()">Baixar Stats JSON</button>
+    <button onclick="exportStats()">Exportar Stats</button>
+    <button onclick="resetStats()" style="color: red;">Reset Stats (CUIDADO!)</button>
+    
+    <hr>
+    
+    <h2>Log de Atividade</h2>
+    <pre id="activityLog">Dashboard iniciado...\n</pre>
 
     <script>
-        // Configurações
-        const CONFIG = {
-            username: '{{ username }}', // Recebido do backend Flask
-            password: '{{ password }}', // Recebido do backend Flask
-            refreshInterval: 30000 // 30 segundos
-        };
-
-        let refreshTimer;
-        let isRefreshing = false;
-
-        // Inicialização
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Dashboard inicializado');
-            refreshData();
-            startAutoRefresh();
-        });
-
-        function getAuthHeader() {
-            return 'Basic ' + btoa(`${CONFIG.username}:${CONFIG.password}`);
+        let lastHealthData = null;
+        let lastStatsData = null;
+        
+        function log(message) {
+            const logElement = document.getElementById('activityLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
         }
-
-        function showAlert(message, type = 'error', duration = 5000) {
-            const container = document.getElementById('alert-container');
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            
-            container.innerHTML = '';
-            container.appendChild(alert);
-            
-            if (duration > 0) {
-                setTimeout(() => alert.remove(), duration);
+        
+        function updateLastUpdateTime() {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+        }
+        
+        function setElementText(id, value, className = '') {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+                element.className = className;
             }
         }
-
-        function updateTimestamp() {
-            const element = document.getElementById('last-update');
-            element.textContent = `Última atualização: ${new Date().toLocaleString('pt-BR')}`;
-        }
-
-        function formatUptime(seconds) {
-            if (!seconds || seconds < 0) return 'N/A';
-            
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = Math.floor(seconds % 60);
-            
-            if (hours > 0) {
-                return `${hours}h ${minutes}m`;
-            } else if (minutes > 0) {
-                return `${minutes}m ${secs}s`;
-            } else {
-                return `${secs}s`;
+        
+        function updateHealthStatus(data) {
+            if (data && data.status) {
+                const statusMap = {
+                    'healthy': { text: 'Saudável', class: 'success' },
+                    'warning': { text: 'Atenção', class: 'warning' },
+                    'critical': { text: 'Crítico', class: 'error' },
+                    'error': { text: 'Erro', class: 'error' }
+                };
+                
+                const status = statusMap[data.status] || { text: 'Desconhecido', class: '' };
+                setElementText('systemStatus', status.text, status.class);
+                
+                if (data.stats && data.stats.overall) {
+                    const overall = data.stats.overall;
+                    setElementText('totalRequests', overall.total_requests || 0);
+                    setElementText('successCount', overall.success_count || 0);
+                    setElementText('errorCount', overall.error_count || 0);
+                    setElementText('successRate', overall.success_rate || 0);
+                    setElementText('historySize', overall.history_size || 0);
+                    setElementText('maxHistory', overall.max_history || 0);
+                }
+                
+                if (data.stats && data.stats.monitor_status) {
+                    const monitor = data.stats.monitor_status;
+                    setElementText('isRunning', monitor.is_running ? 'Sim' : 'Não', monitor.is_running ? 'success' : 'error');
+                    setElementText('threadAlive', monitor.thread_alive ? 'Sim' : 'Não', monitor.thread_alive ? 'success' : 'error');
+                }
+                
+                lastHealthData = data;
+                log('Status atualizado com sucesso');
             }
         }
-
-        function getStatusClass(value, type = 'percentage') {
-            if (type === 'percentage') {
-                if (value >= 80) return 'healthy';
-                if (value >= 60) return 'warning';
-                return 'critical';
-            }
-            return 'unknown';
-        }
-
-        async function fetchData(endpoint) {
-            try {
-                const response = await fetch(endpoint, {
-                    headers: {
-                        'Authorization': getAuthHeader(),
-                        'Content-Type': 'application/json'
+        
+        function updateDetailedStats(data) {
+            if (data) {
+                // Atualizar stats por palavra-chave
+                if (data.by_keyword_set && Object.keys(data.by_keyword_set).length > 0) {
+                    let keywordText = '';
+                    for (const [keywords, stats] of Object.entries(data.by_keyword_set)) {
+                        keywordText += `${keywords}:\n`;
+                        keywordText += `  Sucessos: ${stats.success_count}\n`;
+                        keywordText += `  Erros: ${stats.error_count}\n`;
+                        keywordText += `  Taxa: ${stats.success_rate}%\n\n`;
                     }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                return await response.json();
-            } catch (error) {
-                console.error(`Erro ao buscar ${endpoint}:`, error);
-                throw error;
-            }
-        }
-
-        async function refreshData() {
-            if (isRefreshing) {
-                console.log('Refresh já em andamento, ignorando...');
-                return;
-            }
-
-            isRefreshing = true;
-            console.log('Iniciando refresh dos dados...');
-
-            try {
-                // Buscar dados de health
-                await updateHealthData();
-                
-                // Buscar estatísticas detalhadas
-                await updateDetailedStats();
-                
-                // Buscar logs recentes
-                await updateLogs();
-                
-                updateTimestamp();
-                showAlert('Dados atualizados com sucesso!', 'success', 3000);
-                
-            } catch (error) {
-                console.error('Erro durante refresh:', error);
-                showAlert(`Erro ao atualizar dados: ${error.message}`, 'error');
-            } finally {
-                isRefreshing = false;
-            }
-        }
-
-        async function updateHealthData() {
-            try {
-                const healthData = await fetchData('/health');
-                console.log('Dados de health recebidos:', healthData);
-                
-                // Atualizar status geral
-                updateStatusCard('general-status', {
-                    value: healthData.status || 'unknown',
-                    description: healthData.message || 'Status indisponível',
-                    status: healthData.status || 'unknown'
-                });
-
-                // Atualizar taxa de sucesso
-                const successRate = healthData.success_rate || 0;
-                updateStatusCard('success-rate', {
-                    value: `${successRate}%`,
-                    description: `Taxa de requisições bem-sucedidas`,
-                    status: getStatusClass(successRate)
-                });
-
-                // Atualizar informações do monitor se disponível
-                if (healthData.stats && healthData.stats.monitor_status) {
-                    const monitorStatus = healthData.stats.monitor_status;
-                    updateStatusCard('monitor-status', {
-                        value: monitorStatus.is_running ? 'Ativo' : 'Inativo',
-                        description: monitorStatus.thread_alive ? 'Thread ativa' : 'Thread inativa',
-                        status: monitorStatus.is_running ? 'healthy' : 'critical'
-                    });
-                }
-
-                // Atualizar uptime se disponível
-                if (healthData.stats && healthData.stats.overall && healthData.stats.overall.uptime_seconds) {
-                    const uptime = healthData.stats.overall.uptime_seconds;
-                    updateStatusCard('uptime-card', {
-                        value: formatUptime(uptime),
-                        description: 'Tempo de execução',
-                        status: 'healthy'
-                    });
-                }
-
-            } catch (error) {
-                console.error('Erro ao atualizar dados de health:', error);
-                // Atualizar cards com estado de erro
-                ['general-status', 'monitor-status', 'success-rate', 'uptime-card'].forEach(id => {
-                    updateStatusCard(id, {
-                        value: 'Erro',
-                        description: 'Falha ao carregar dados',
-                        status: 'critical'
-                    });
-                });
-                throw error;
-            }
-        }
-
-        function updateStatusCard(cardId, data) {
-            const card = document.getElementById(cardId);
-            if (!card) {
-                console.warn(`Card ${cardId} não encontrado`);
-                return;
-            }
-
-            // Atualizar classe do status
-            card.className = `status-card ${data.status}`;
-            
-            // Atualizar valor
-            const valueElement = card.querySelector('.status-value');
-            if (valueElement) {
-                valueElement.textContent = data.value;
-            }
-            
-            // Atualizar descrição
-            const descElement = card.querySelector('.status-description');
-            if (descElement) {
-                descElement.textContent = data.description;
-            }
-        }
-
-        async function updateDetailedStats() {
-            try {
-                const statsData = await fetchData('/health/stats');
-                console.log('Estatísticas detalhadas recebidas:', statsData);
-                
-                const container = document.getElementById('stats-content');
-                container.innerHTML = '';
-
-                if (statsData.overall) {
-                    // Estatísticas gerais
-                    const overall = statsData.overall;
-                    const metricsHtml = Object.entries(overall).map(([key, value]) => {
-                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                        let displayValue = value;
-                        
-                        if (key.includes('rate') && typeof value === 'number') {
-                            displayValue = `${value}%`;
-                        } else if (key.includes('time') && typeof value === 'number') {
-                            displayValue = `${value}s`;
-                        } else if (typeof value === 'number' && value > 1000) {
-                            displayValue = value.toLocaleString();
-                        }
-                        
-                        return `
-                            <div class="metric-row">
-                                <span class="metric-label">${label}</span>
-                                <span class="metric-value">${displayValue}</span>
-                            </div>
-                        `;
-                    }).join('');
-                    
-                    container.innerHTML = metricsHtml;
+                    document.getElementById('keywordData').textContent = keywordText || 'Nenhum dado disponível';
                 } else {
-                    container.innerHTML = '<p>Nenhuma estatística disponível</p>';
+                    document.getElementById('keywordData').textContent = 'Nenhum dado por palavra-chave disponível';
                 }
-
-            } catch (error) {
-                console.error('Erro ao atualizar estatísticas:', error);
-                document.getElementById('stats-content').innerHTML = 
-                    `<p style="color: #dc3545;">Erro ao carregar estatísticas: ${error.message}</p>`;
-            }
-        }
-
-        async function updateLogs() {
-            try {
-                // Simular dados de log (já que não temos endpoint específico para logs recentes)
-                const container = document.getElementById('logs-content');
-                const now = new Date();
                 
-                const sampleLogs = [
-                    { level: 'info', message: 'Monitor iniciado com sucesso', time: new Date(now - 300000) },
-                    { level: 'info', message: 'Processando palavras-chave: iphone, samsung', time: new Date(now - 240000) },
-                    { level: 'warning', message: 'Tentativa de reconexão após timeout', time: new Date(now - 180000) },
-                    { level: 'info', message: '15 anúncios processados', time: new Date(now - 120000) },
-                    { level: 'info', message: 'Backup de dados realizado', time: new Date(now - 60000) }
-                ];
-
-                const logsHtml = sampleLogs.map(log => {
-                    return `
-                        <div class="log-entry ${log.level}">
-                            [${log.time.toLocaleTimeString('pt-BR')}] ${log.message}
-                        </div>
-                    `;
-                }).join('');
+                // Atualizar erros recentes
+                if (data.recent_errors && data.recent_errors.length > 0) {
+                    let errorText = '';
+                    data.recent_errors.forEach((error, index) => {
+                        const time = new Date(error.timestamp).toLocaleString();
+                        errorText += `${index + 1}. [${time}] ${error.keywords}\n`;
+                        errorText += `   Página: ${error.page || 'N/A'}\n`;
+                        errorText += `   Tipo: ${error.error_type || 'N/A'}\n`;
+                        if (error.error_message) {
+                            errorText += `   Msg: ${error.error_message}\n`;
+                        }
+                        errorText += '\n';
+                    });
+                    document.getElementById('errorData').textContent = errorText;
+                } else {
+                    document.getElementById('errorData').textContent = 'Nenhum erro recente';
+                }
                 
-                container.innerHTML = logsHtml || '<p>Nenhum log disponível</p>';
-
-            } catch (error) {
-                console.error('Erro ao atualizar logs:', error);
-                document.getElementById('logs-content').innerHTML = 
-                    `<p style="color: #dc3545;">Erro ao carregar logs: ${error.message}</p>`;
+                lastStatsData = data;
+                log('Estatísticas detalhadas atualizadas');
             }
         }
-
-        // Monitor info
-        const monitorContainer = document.getElementById('monitor-content');
-        monitorContainer.innerHTML = `
-            <div class="metric-row">
-                <span class="metric-label">Versão</span>
-                <span class="metric-value">1.0.0</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Processo</span>
-                <span class="metric-value">Python Flask</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Modo</span>
-                <span class="metric-value">Produção</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">Porta</span>
-                <span class="metric-value">5000</span>
-            </div>
-        `;
-
-        function startAutoRefresh() {
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
+        
+        function showPreviousData() {
+            if (lastHealthData) {
+                updateHealthStatus(lastHealthData);
+                log('Mostrando dados anteriores de health');
             }
-            
-            refreshTimer = setInterval(() => {
-                console.log('Auto-refresh executado');
-                refreshData();
-            }, CONFIG.refreshInterval);
-            
-            console.log(`Auto-refresh configurado para ${CONFIG.refreshInterval/1000}s`);
+            if (lastStatsData) {
+                updateDetailedStats(lastStatsData);
+                log('Mostrando estatísticas anteriores');
+            }
         }
-
-        // Funções dos botões
-        async function downloadStats() {
+        
+        async function fetchHealth() {
             try {
-                const stats = await fetchData('/health/stats');
-                const dataStr = JSON.stringify(stats, null, 2);
-                const dataBlob = new Blob([dataStr], { type: 'application/json' });
-                
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(dataBlob);
-                link.download = `health-stats-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-                link.click();
-                
-                showAlert('Download iniciado com sucesso!', 'success');
-            } catch (error) {
-                showAlert(`Erro no download: ${error.message}`, 'error');
-            }
-        }
-
-        async function exportStats() {
-            try {
-                const result = await fetchData('/health/export');
-                showAlert(result.message || 'Estatísticas exportadas com sucesso!', 'success');
-            } catch (error) {
-                showAlert(`Erro na exportação: ${error.message}`, 'error');
-            }
-        }
-
-        async function resetStats() {
-            if (!confirm('Tem certeza que deseja resetar todas as estatísticas? Esta ação não pode ser desfeita.')) {
-                return;
-            }
-
-            try {
-                const response = await fetch('/health/reset', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': getAuthHeader(),
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateHealthStatus(data);
+                } else {
                     throw new Error(`HTTP ${response.status}`);
                 }
-
-                const result = await response.json();
-                showAlert(result.message || 'Estatísticas resetadas com sucesso!', 'success');
-                
-                // Atualiza dados após 2 segundos
-                setTimeout(refreshData, 2000);
             } catch (error) {
-                showAlert(`Erro no reset: ${error.message}`, 'error');
+                log(`Erro ao buscar health: ${error.message}`);
+                setElementText('systemStatus', 'Erro de Conexão', 'error');
+                showPreviousData();
             }
         }
-
-        // Cleanup ao sair da página
-        window.addEventListener('beforeunload', function() {
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
+        
+        async function fetchDetailedStats() {
+            try {
+                const response = await fetch('/health/stats');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateDetailedStats(data);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`Erro ao buscar stats: ${error.message}`);
+                showPreviousData();
             }
+        }
+        
+        async function forceUpdate() {
+            log('Atualização manual iniciada...');
+            updateLastUpdateTime();
+            await Promise.all([fetchHealth(), fetchDetailedStats()]);
+        }
+        
+        async function downloadStats() {
+            try {
+                const response = await fetch('/health/stats');
+                if (response.ok) {
+                    const data = await response.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `stats_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    log('Stats baixadas com sucesso');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`Erro ao baixar stats: ${error.message}`);
+            }
+        }
+        
+        async function exportStats() {
+            try {
+                const response = await fetch('/health/export', { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Export realizado: ${data.message}`);
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error || `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`Erro no export: ${error.message}`);
+            }
+        }
+        
+        async function resetStats() {
+            if (confirm('ATENÇÃO: Isso vai resetar TODAS as estatísticas. Confirma?')) {
+                try {
+                    const response = await fetch('/health/reset', { method: 'POST' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        log(`Reset realizado: ${data.message}`);
+                        setTimeout(forceUpdate, 1000);
+                    } else {
+                        const error = await response.json();
+                        throw new Error(error.error || `HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    log(`Erro no reset: ${error.message}`);
+                }
+            }
+        }
+        
+        // Inicialização
+        window.addEventListener('load', function() {
+            log('Dashboard carregado');
+            forceUpdate();
+            
+            // Auto-refresh a cada 30 segundos
+            setInterval(function() {
+                fetchHealth();
+                fetchDetailedStats();
+                updateLastUpdateTime();
+            }, 30000);
         });
     </script>
 </body>
