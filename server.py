@@ -283,7 +283,8 @@ def start():
         
         save_dynamic_config(config)
         negative_keywords_list = [kw.strip() for kw in config["negative_keywords_list"].split(",") if kw.strip()]
-        
+        positive_keywords_list = [kw.strip() for kw in config["positive_keywords_list"].split(",") if kw.strip()]
+
         telegram_bot = TelegramBot(token=config["token"])
         scraper = MarketRoxoScraperCloudflare(
             base_url=BASE_URL,
