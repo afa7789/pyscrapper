@@ -317,7 +317,7 @@ def start():
             return jsonify({"message": "Erro ao iniciar monitoramento: já está ativo"}), 500
         
         get_logger().info(f"Monitoramento iniciado com {len(keywords_list)} palavras-chave")
-        return jsonify({"message": "Monitoramento iniciado com sucesso!"}, 200)
+        return jsonify({"message": "Monitoramento iniciado com sucesso!"}), 200
         
     except Exception as e:
         get_logger().error(f"Erro ao iniciar monitoramento: {str(e)}")
