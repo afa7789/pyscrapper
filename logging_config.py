@@ -214,22 +214,60 @@ def get_logger():
         logger.info("🔧 Logger configurado automaticamente para console")
     
     return logger
-
-def force_log_rotation():
-    """Força a rotação do log atual manualmente"""
-    logger = logging.getLogger('marketroxo')
     
-    for handler in logger.handlers:
-        if hasattr(handler, 'doRollover'):
+def force_log_rotation():
+    """Força a rotação do log atual, arquivando com timestamp."""
+    logger = logging.getLogger('marketroxo')
+    log_file_path = os.path.join('logs', 'app.log')
+    gmt_minus_3 = timezone(timedelta(hours=-3))
+    timestamp = datetime.now(gmt_minus_3).strftime("%Y-%m-%d_%H-%M-%S")
+    
+    # Verifica se está em modo de teste
+    is_test_mode = os.getenv('TEST_MODE', '0') == '1'
+    if is_test_mode:
+        logger.warning("Rotação de log não suportada em modo de teste")
+        return False
+    
+    rotated = False
+    for handler in logger.handlers[:]:  # Copia lista para evitar modificação durante iteração
+        if isinstance(handler, (ConcurrentRotatingFileHandler, CustomTimedRotatingFileHandler)):
             try:
-                handler.doRollover()
-                logger.info("🔄 Rotação de log forçada manualmente")
-                return True
+                # Fecha o handler atual
+                handler.close()
+                # Renomeia o arquivo de log atual, se existir
+                if os.path.exists(log_file_path):
+                    archived_name = f"{log_file_path}.{timestamp}"
+                    os.rename(log_file_path, archived_name)
+                    logger.info(f"🔄 Log rotacionado para {archived_name}")
+                # Cria um novo arquivo de log vazio
+                open(log_file_path, 'a').close()
+                # Cria um novo handler com a mesma configuração
+                if isinstance(handler, ConcurrentRotatingFileHandler):
+                    new_handler = ConcurrentRotatingFileHandler(
+                        log_file_path,
+                        maxBytes=handler.maxBytes,
+                        backupCount=handler.backupCount,
+                        encoding='utf-8'
+                    )
+                else:  # CustomTimedRotatingFileHandler
+                    new_handler = CustomTimedRotatingFileHandler(
+                        log_file_path,
+                        when=handler.when,
+                        interval=handler.interval,
+                        backupCount=handler.backupCount,
+                        encoding='utf-8'
+                    )
+                new_handler.setFormatter(handler.formatter)
+                logger.removeHandler(handler)
+                logger.addHandler(new_handler)
+                rotated = True
             except Exception as e:
                 logger.error(f"Erro ao forçar rotação: {e}")
                 return False
     
-    return False
+    if not rotated:
+        logger.warning("Nenhum handler de arquivo encontrado para rotação")
+    return rotated
 
 def cleanup_on_exit():
     """Função para limpar recursos na saída"""

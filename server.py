@@ -531,16 +531,16 @@ def logs():
 @app.route('/archive_log', methods=['GET'])
 @requires_auth
 def archive_log():
-    """Força a rotação do log atual"""
+    """Força a rotação do log atual via HTTP."""
     try:
         if force_log_rotation():
             return jsonify({"message": "Log rotacionado com sucesso"}), 200
         else:
-            return jsonify({"message": "Falha ao rotacionar log"}), 500
+            return jsonify({"message": "Falha ao rotacionar log: nenhum handler de arquivo ou modo de teste ativo"}), 400
     except Exception as e:
         get_logger().error(f"Erro ao rotacionar log: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
+        
 @app.route('/download-logs', methods=['GET'])
 @requires_auth
 def download_logs():
