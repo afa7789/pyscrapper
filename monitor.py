@@ -232,8 +232,8 @@ class Monitor:
                 else:
                     self.logger.warning(f"⚠️ Todas as {self.retry_attempts} tentativas falharam para a página {page_num} do conjunto {set_idx + 1}. Prosseguindo para a próxima página/conjunto.")
                     return None
-        
-        return None
+                    
+            return None
 
     def _scrape_keyword_set(self, current_keywords_tuple, set_idx, total_sets):
         """Raspa todas as páginas para um conjunto específico de palavras-chave"""
@@ -287,6 +287,7 @@ class Monitor:
         
         self.logger.info(f"🍻 Encontrou {len(truly_new_ads)} anúncios ainda não vistos neste ciclo!")
         
+        # Remove duplicates
         unique_hashes = set(truly_new_ads_hash)
         if len(unique_hashes) != len(truly_new_ads_hash):
             self.logger.warning(f"⚠️ AVISO: Detectadas {len(truly_new_ads_hash) - len(unique_hashes)} duplicatas nos hashes antes do envio!")
@@ -302,22 +303,28 @@ class Monitor:
             truly_new_ads_hash = filtered_hashes
             self.logger.info(f"🔧 Após filtrar duplicatas: {len(truly_new_ads)} anúncios únicos")
         
-        formatted_ads = []
+        # Format ads and track which ones are actually new
+        ads_to_send = []
+        hashes_to_send = []
+        
         for i, ad in enumerate(truly_new_ads):
             ad_hash = truly_new_ads_hash[i]
             if ad_hash in self.seen_ads:
                 self.logger.info(f"🚫 Hash {ad_hash[:8]}...{ad_hash[-8:]} já foi visto - pulando envio")
                 continue
+            
             formatted_ad = f"Título: {ad['title']}\nURL: {ad['url']}\nHash: {ad_hash[:8]}...{ad_hash[-8:]}"
-            formatted_ads.append(formatted_ad)
+            ads_to_send.append(formatted_ad)
+            hashes_to_send.append(ad_hash)
         
-        if not formatted_ads:
+        if not ads_to_send:
             self.logger.info("ℹ️ Nenhum anúncio válido restou após verificações de duplicata.")
             return
         
         try:
-            messages = self._split_message(formatted_ads)
-            successfully_sent_count = 0
+            # Send ads one by one or in batches based on batch_size
+            messages = self._split_message(ads_to_send)
+            successfully_sent_hashes = []
             
             for msg_idx, msg in enumerate(messages):
                 if not self.is_running:
@@ -326,8 +333,17 @@ class Monitor:
                 
                 try:
                     self.telegram_bot.send_message(self.chat_id, msg)
-                    successfully_sent_count += len(formatted_ads[msg_idx * self.batch_size:(msg_idx + 1) * self.batch_size])
-                    self.logger.info(f"📤 Mensagem {msg_idx + 1}/{len(messages)} enviada com sucesso")
+                    
+                    # Calculate which ads were sent in this message
+                    # Each message contains batch_size ads (or remaining ads if less than batch_size)
+                    start_idx = msg_idx * self.batch_size
+                    end_idx = min(start_idx + self.batch_size, len(hashes_to_send))
+                    
+                    # Add the hashes of successfully sent ads
+                    successfully_sent_hashes.extend(hashes_to_send[start_idx:end_idx])
+                    
+                    self.logger.info(f"📤 Mensagem {msg_idx + 1}/{len(messages)} enviada com sucesso ({end_idx - start_idx} anúncios)")
+                    
                 except Exception as send_error:
                     self.logger.error(f"❌ Erro ao enviar mensagem {msg_idx + 1}/{len(messages)}: {str(send_error)}")
                     continue
@@ -337,14 +353,15 @@ class Monitor:
                     self.logger.info("🛑 Monitoramento interrompido durante o envio de mensagens.")
                     break
             
-            if self.is_running and successfully_sent_count > 0:
-                hashes_to_save = truly_new_ads_hash[:successfully_sent_count]
-                for ad_hash in hashes_to_save:
+            # Save hashes of successfully sent ads
+            if self.is_running and successfully_sent_hashes:
+                for ad_hash in successfully_sent_hashes:
                     if ad_hash not in self.seen_ads:
                         self.seen_ads.add(ad_hash)
                         self._save_ad_hash(ad_hash)
-                self.logger.info(f"📩 Enviados {successfully_sent_count} novos anúncios para Telegram e salvos {len(hashes_to_save)} hashes")
                 
+                self.logger.info(f"📩 Enviados {len(successfully_sent_hashes)} novos anúncios para Telegram e salvos {len(successfully_sent_hashes)} hashes")
+                    
         except Exception as e:
             self.logger.error(f"❌ Erro geral ao enviar mensagens para Telegram: {str(e)}")
 
