@@ -62,6 +62,20 @@
     
     <hr>
     
+    <h2>Ranking de Eficiência</h2>
+    <div id="efficiencyRanking" style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+            <h3 class="success">🏆 Top 10 Mais Eficientes</h3>
+            <pre id="topKeywords" style="max-height: 250px; overflow-y: auto; background: #f0f8f0; border: 1px solid #4CAF50;">Carregando...</pre>
+        </div>
+        <div style="flex: 1; min-width: 300px;">
+            <h3 class="error">⚠️ Top 10 Menos Eficientes</h3>
+            <pre id="bottomKeywords" style="max-height: 250px; overflow-y: auto; background: #fff5f5; border: 1px solid #f44336;">Carregando...</pre>
+        </div>
+    </div>
+    
+    <hr>
+    
     <h2>Últimos Erros</h2>
     <div id="recentErrors">
         <pre id="errorData">Carregando...</pre>
@@ -149,8 +163,13 @@
                         keywordText += `  Taxa: ${stats.success_rate}%\n\n`;
                     }
                     document.getElementById('keywordData').textContent = keywordText || 'Nenhum dado disponível';
+                    
+                    // Atualizar ranking de eficiência
+                    updateEfficiencyRanking(data.by_keyword_set);
                 } else {
                     document.getElementById('keywordData').textContent = 'Nenhum dado por palavra-chave disponível';
+                    document.getElementById('topKeywords').textContent = 'Nenhum dado disponível';
+                    document.getElementById('bottomKeywords').textContent = 'Nenhum dado disponível';
                 }
                 
                 // Atualizar erros recentes
@@ -174,6 +193,51 @@
                 lastStatsData = data;
                 log('Estatísticas detalhadas atualizadas');
             }
+        }
+        
+        function updateEfficiencyRanking(keywordData) {
+            // Converter dados para array e filtrar apenas com requests suficientes
+            const keywordArray = Object.entries(keywordData)
+                .map(([keywords, stats]) => ({
+                    keywords,
+                    success_rate: stats.success_rate || 0,
+                    total_requests: (stats.success_count || 0) + (stats.error_count || 0),
+                    success_count: stats.success_count || 0,
+                    error_count: stats.error_count || 0
+                }))
+                .filter(item => item.total_requests >= 3); // Só considera com pelo menos 3 requests
+            
+            if (keywordArray.length === 0) {
+                document.getElementById('topKeywords').textContent = 'Dados insuficientes\n(mín. 3 requests por keyword)';
+                document.getElementById('bottomKeywords').textContent = 'Dados insuficientes\n(mín. 3 requests por keyword)';
+                return;
+            }
+            
+            // Ordenar por taxa de sucesso
+            keywordArray.sort((a, b) => b.success_rate - a.success_rate);
+            
+            // Top 10 mais eficientes
+            const top10 = keywordArray.slice(0, 10);
+            let topText = '';
+            top10.forEach((item, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                topText += `${medal} ${item.keywords}\n`;
+                topText += `    Taxa: ${item.success_rate}% (${item.success_count}/${item.total_requests})\n\n`;
+            });
+            document.getElementById('topKeywords').textContent = topText || 'Nenhum dado suficiente';
+            
+            // Top 10 menos eficientes (invertido)
+            const bottom10 = keywordArray.slice(-10).reverse();
+            let bottomText = '';
+            bottom10.forEach((item, index) => {
+                bottomText += `${index + 1}. ${item.keywords}\n`;
+                bottomText += `    Taxa: ${item.success_rate}% (${item.success_count}/${item.total_requests})\n`;
+                if (item.error_count > 0) {
+                    bottomText += `    Erros: ${item.error_count}\n`;
+                }
+                bottomText += '\n';
+            });
+            document.getElementById('bottomKeywords').textContent = bottomText || 'Nenhum dado suficiente';
         }
         
         function showPreviousData() {
