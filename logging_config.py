@@ -279,7 +279,7 @@ def force_log_rotation():
             elif isinstance(handler, CustomTimedRotatingFileHandler):
                 new_handler = CustomTimedRotatingFileHandler(
                     log_file_path,
-                    when=handler.when Declare a variável `when` para evitar conflito com a palavra-chave.
+                    when=handler.when, # Declare a variável `when` para evitar conflito com a palavra-chave.
                     interval=handler.interval,
                     backupCount=handler.backupCount,
                     encoding='utf-8'
