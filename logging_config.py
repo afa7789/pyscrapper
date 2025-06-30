@@ -17,7 +17,7 @@ class GMT3Formatter(logging.Formatter):
         dt = self.converter(record.created)
         if datefmt:
             return dt.strftime(datefmt)
-        return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+        return dt.strftime("%Y-%m-%d %H:%M:%S")  # Removed %Z timezone
 
 class CustomTimedRotatingFileHandler(TimedRotatingFileHandler):
     """Handler customizado para rotação por tempo com timezone GMT-3"""
