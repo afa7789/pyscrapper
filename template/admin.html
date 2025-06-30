@@ -397,7 +397,8 @@
         <div class="form-group">
             <label for="positiveKeywords">Palavras-chave positivas (separadas por vírgula):</label>
             <p>Palavras que serão utilizadas para filtrar como anuncio interessado ( adicionar a lista ).</p>
-            <input type="text" id="positiveKeywords" value="{{ positive_keywords_list }}">
+            <!-- <input type="text" id="positiveKeywords" value="{{ positive_keywords_list }}"> -->
+            <textarea id="positiveKeywords" wrap="soft" onblur="convertToSingleLine(this)">{{ positive_keywords_list }}</textarea>
         </div>
         <div class="form-group">
             <label for="negativeKeywords">Palavras-chave negativas (separadas por vírgula):</label>
