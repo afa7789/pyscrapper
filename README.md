@@ -104,3 +104,24 @@ Ensure that you have the following:
 - NGINX properly configured
 - Python dependencies installed
 - A correctly filled .env file
+
+## :)
+
+```bash
+find . -maxdepth 1 -type f -name "*.py" -exec wc -l {} + | sort -n | awk '{print $2 ": " $1 " lines"}'
+./emoji_sorter.py: 58 lines
+./telegram_bot.py: 92 lines
+./small_test_scraper.py: 111 lines
+./request_stats.py: 202 lines
+./logging_config.py: 287 lines
+./scraper_cloudflare.py: 448 lines
+./monitor.py: 478 lines
+./server.py: 716 lines
+total: 2392 lines
+```
+
+# Licensing & more
+
+No code of conduct
+
+No licensing
