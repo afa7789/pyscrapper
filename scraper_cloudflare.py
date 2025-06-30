@@ -336,7 +336,7 @@ class MarketRoxoScraperCloudflare:
         except Exception as e:
             self.logger.error(f"❌ Erro ao escrever no arquivo found_ads.log: {e}")
 
-    def scrape_err(self, keywords, negative_keywords_list=None, query_keywords=None,
+    def scrape_err(self, keywords, positive_keywords_list=None ,negative_keywords_list=None, query_keywords=None,
                    start_page=1, num_pages_to_scrape=1, save_page=False,
                    page_retry_attempts=3, page_retry_delay_min=5, page_retry_delay_max=15):
         """
@@ -377,6 +377,13 @@ class MarketRoxoScraperCloudflare:
                         self.logger.info(f"💾 Página {page_num} salva para depuração: {debug_filename}.")
 
                     no_ads_message_found = "Nenhum anúncio foi encontrado" in soup.text or "Não encontramos nenhum resultado" in soup.text
+
+                    # append positive keywords to the keywords list if provided
+                    if positive_keywords_list:
+                        # Ensure keywords is a list before concatenating
+                        keywords_list = keywords if isinstance(keywords, list) else [keywords] if keywords else []
+                        # Combine and deduplicate
+                        keywords = list(set(keywords_list + positive_keywords_list))
 
                     new_ads = self._extract_ads(soup, keywords, negative_keywords_list, page_url=url)
 

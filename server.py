@@ -16,8 +16,25 @@ from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 app = Flask(__name__, template_folder='template')
 
-# Configura o logger no início da aplicação
-setup_logging()
+
+# Substitua a linha onde você configura o logging:
+# Antes: setup_logging()
+# Agora escolha uma das opções:
+
+# OPÇÃO 1: Rotação a cada 4 horas (recomendado)
+setup_4hour_rotation()
+
+# OPÇÃO 2: Rotação a cada 10MB (para logs muito verbosos)
+# setup_frequent_rotation()
+
+# OPÇÃO 3: Rotação a cada 1 hora (para monitoramento intensivo)
+# setup_hourly_rotation()
+
+# OPÇÃO 4: Configuração personalizada
+# setup_logging(rotation_type='time', rotation_interval=6)  # A cada 6 horas
+# setup_logging(rotation_type='size', rotation_interval=5)  # A cada 5MB
+
+# Adicione estas novas rotas ao seu server.py:
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -51,6 +68,7 @@ TELEGRAM_TOKEN = initial_config.get("token", os.getenv("TELEGRAM_TOKEN", ""))
 CHAT_INPUT = initial_config.get("chat_input", os.getenv("TELEGRAM_CHAT_ID_OR_PHONE", ""))
 DEFAULT_KEYWORDS = initial_config.get("keywords", os.getenv("DEFAULT_KEYWORDS", "iphone, samsung, xiaomi"))
 NEGATIVE_KEYWORDS = initial_config.get("negative_keywords_list", os.getenv("NEGATIVE_KEYWORDS_LIST", ""))
+POSITIVE_KEYWORDS = initial_config.get("positive_keywords_list", os.getenv("POSITIVE_KEYWORDS_LIST", ""))
 
 BASE_URL = os.getenv("MAIN_URL_SCRAPE_ROXO", "")
 if not BASE_URL:
@@ -199,6 +217,7 @@ def admin():
         'admin.html',
         keywords_list=keywords_str,
         negative_keywords_list=current_config.get("negative_keywords_list", NEGATIVE_KEYWORDS),
+        positive_keywords_list=current_config.get("positive_keywords_list", POSITIVE_KEYWORDS),
         token=current_config.get("token", TELEGRAM_TOKEN),
         chat_input=current_config.get("chat_input", CHAT_INPUT),
         interval_monitor=current_config.get("interval_monitor", 30),
@@ -245,6 +264,7 @@ def start():
         config = {
             "keywords": keywords_str,
             "negative_keywords_list": data.get('negative_keywords_list', NEGATIVE_KEYWORDS),
+            "positive_keywords_list": data.get('positive_keywords_list', POSITIVE_KEYWORDS),
             "token": data.get('token', TELEGRAM_TOKEN),
             "chat_input": data.get('chat_input', CHAT_INPUT),
             "interval_monitor": int(data.get('interval_monitor', 30)),
@@ -272,6 +292,7 @@ def start():
         monitor = Monitor(
             keywords=keywords_list,
             negative_keywords_list=negative_keywords_list,
+            positive_keywords_list=positive_keywords_list,
             scraper=scraper,
             telegram_bot=telegram_bot,
             chat_id=config["chat_input"],

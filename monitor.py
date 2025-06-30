@@ -12,7 +12,7 @@ from request_stats import RequestStats
 
 class Monitor:
     def __init__(self,
-                 keywords, negative_keywords_list,
+                 keywords, negative_keywords_list, positive_keywords_list,
                  scraper, telegram_bot,
                  chat_id, hash_file=None,
                  monitoring_interval=30,
@@ -27,6 +27,7 @@ class Monitor:
                  ):
         self.keywords = keywords
         self.negative_keywords_list = negative_keywords_list
+        self.positive_keywords_list = positive_keywords_list
         self.scraper = scraper
         self.telegram_bot = telegram_bot
         self.chat_id = chat_id
@@ -189,6 +190,7 @@ class Monitor:
                     query_keywords=current_keywords,
                     keywords=self.keywords,
                     negative_keywords_list=self.negative_keywords_list,
+                    positive_keywords_list=self.positive_keywords_list,
                     start_page=page_num,
                     save_page=False,
                     num_pages_to_scrape=1,

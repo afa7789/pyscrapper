@@ -380,10 +380,17 @@
         <h1>Painel de Procura do MarketRoxo</h1>
         <div class="form-group">
             <label for="keywords">Palavras-chave (separadas por vírgula):</label>
+            <p>Palavras que serão utilizadas para pesquisar.</p>
             <input type="text" id="keywords" value="{{ keywords_list }}" oninput="updateSubsetCount()">
         </div>
         <div class="form-group">
+            <label for="positiveKeywords">Palavras-chave positivas (separadas por vírgula):</label>
+            <p>Palavras que serão utilizadas para filtrar como anuncio interessado ( adicionar a lista ).</p>
+            <input type="text" id="positiveKeywords" value="{{ positive_keywords_list }}">
+        </div>
+        <div class="form-group">
             <label for="negativeKeywords">Palavras-chave negativas (separadas por vírgula):</label>
+            <p>Palavras que serão utilizadas para filtrar como anuncio não interessante ( remover da lista ).</p>
             <input type="text" id="negativeKeywords" value="{{ negative_keywords_list }}">
         </div>
         <div class="form-group">
@@ -592,6 +599,7 @@
         function startMonitoring() {
             const data = {
                 keywords_list: document.getElementById('keywords').value,
+                positive_keywords_list: document.getElementById('positiveKeywords').value,
                 negative_keywords_list: document.getElementById('negativeKeywords').value,
                 token: document.getElementById('token').value,
                 chat_input: document.getElementById('chatInput').value,
