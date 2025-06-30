@@ -11,7 +11,8 @@ from telegram_bot import TelegramBot
 import zipfile
 import io
 from datetime import datetime, timezone, timedelta
-from logging_config import get_logger, setup_logging, GMT3Formatter,setup_4hour_rotation
+from logging_config import setup_4hour_rotation, get_logger, force_log_rotation
+# setup_logging, setup_frequent_rotation, setup_hourly_rotation
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 app = Flask(__name__, template_folder='template')
@@ -495,36 +496,48 @@ def logs():
         get_logger().error(f"Erro ao ler logs: {str(e)}")
         return jsonify({"message": f"Erro ao ler logs: {str(e)}"}), 500
 
+# @app.route('/archive_log', methods=['GET'])
+# @requires_auth
+# def archive_log():
+#     try:
+#         logger = get_logger()
+#         gmt_minus_3 = timezone(timedelta(hours=-3))
+#         timestamp = datetime.now(gmt_minus_3).strftime("%Y-%m-%d_%H-%M-%S")
+#         log_file_path = os.path.join(LOGS_DIR, 'app.log')
+        
+#         for handler in logger.handlers:
+#             if isinstance(handler, ConcurrentRotatingFileHandler):
+#                 handler.close()
+#                 if os.path.exists(log_file_path):
+#                     archived_name = f"{log_file_path}.{timestamp}"
+#                     os.rename(log_file_path, archived_name)
+#                 open(log_file_path, 'a').close()  # Cria novo arquivo vazio
+#                 new_handler = ConcurrentRotatingFileHandler(
+#                     log_file_path,
+#                     maxBytes=10**10,
+#                     backupCount=7,
+#                     encoding='utf-8'
+#                 )
+#                 formatter = GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s')
+#                 new_handler.setFormatter(formatter)
+#                 logger.removeHandler(handler)
+#                 logger.addHandler(new_handler)
+#                 logger.info(f"Log rotacionado para {archived_name}")
+#         return jsonify({"message": "Log arquivado com sucesso"}), 200
+#     except Exception as e:
+#         get_logger().error(f"Erro ao arquivar log: {str(e)}")
+#         return jsonify({"error": str(e)}), 500
 @app.route('/archive_log', methods=['GET'])
 @requires_auth
 def archive_log():
+    """Força a rotação do log atual"""
     try:
-        logger = get_logger()
-        gmt_minus_3 = timezone(timedelta(hours=-3))
-        timestamp = datetime.now(gmt_minus_3).strftime("%Y-%m-%d_%H-%M-%S")
-        log_file_path = os.path.join(LOGS_DIR, 'app.log')
-        
-        for handler in logger.handlers:
-            if isinstance(handler, ConcurrentRotatingFileHandler):
-                handler.close()
-                if os.path.exists(log_file_path):
-                    archived_name = f"{log_file_path}.{timestamp}"
-                    os.rename(log_file_path, archived_name)
-                open(log_file_path, 'a').close()  # Cria novo arquivo vazio
-                new_handler = ConcurrentRotatingFileHandler(
-                    log_file_path,
-                    maxBytes=10**10,
-                    backupCount=7,
-                    encoding='utf-8'
-                )
-                formatter = GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s')
-                new_handler.setFormatter(formatter)
-                logger.removeHandler(handler)
-                logger.addHandler(new_handler)
-                logger.info(f"Log rotacionado para {archived_name}")
-        return jsonify({"message": "Log arquivado com sucesso"}), 200
+        if force_log_rotation():
+            return jsonify({"message": "Log rotacionado com sucesso"}), 200
+        else:
+            return jsonify({"message": "Falha ao rotacionar log"}), 500
     except Exception as e:
-        get_logger().error(f"Erro ao arquivar log: {str(e)}")
+        get_logger().error(f"Erro ao rotacionar log: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/download-logs', methods=['GET'])
