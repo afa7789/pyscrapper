@@ -220,7 +220,7 @@ class MarketRoxoScraperCloudflare:
             if debug:
                 self.logger.info(f"--- Processando link {i+1}/{len(found_links)} ---")
 
-            ad_url, ad_title = self._extract_ad_details(link, debug)
+            ad_url, ad_title, ad_price = self._extract_ad_details(link, debug)
 
             if not ad_url or not ad_title:
                 self._handle_invalid_ad(link, ad_url, ad_title)
@@ -236,9 +236,9 @@ class MarketRoxoScraperCloudflare:
 
             if match_positive and not match_negative:
                 full_url = urljoin(self.base_url, ad_url)
-                ads.append({"title": ad_title, "url": full_url})
+                ads.append({"title": ad_title, "url": full_url, "price": ad_price})
                 if debug:
-                    self.logger.info(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}'")
+                    self.logger.info(f"➡️ Anúncio VÁLIDO adicionado: '{ad_title}' - Preço: '{ad_price}'")
             else:
                 not_valid_or_invalid_count += 1
                 if debug:
@@ -295,7 +295,7 @@ class MarketRoxoScraperCloudflare:
             f.write(str(soup))
 
     def _extract_ad_details(self, link, debug=False):
-        """Extract URL and title from an ad link"""
+        """Extract URL, title and price from an ad link"""
         ad_url = link.get("href")
         ad_title = (
             link.get("title") or
@@ -305,11 +305,40 @@ class MarketRoxoScraperCloudflare:
             ""
         ).lower()
 
+        # Extract price from various possible selectors
+        ad_price = ""
+        price_selectors = [
+            ".olx-adcard__price",
+            "[data-testid='ad-price']", 
+            ".price",
+            ".ad-price",
+            ".fnmrjs-0.cpointer"
+        ]
+        
+        for selector in price_selectors:
+            price_element = link.find(class_=selector.replace(".", "")) if selector.startswith(".") else link.select_one(selector)
+            if price_element:
+                ad_price = price_element.get_text(strip=True)
+                if ad_price:
+                    break
+        
+        # If no price found in the link itself, try to find it in parent containers
+        if not ad_price:
+            parent = link.parent
+            if parent:
+                for selector in price_selectors:
+                    price_element = parent.find(class_=selector.replace(".", "")) if selector.startswith(".") else parent.select_one(selector)
+                    if price_element:
+                        ad_price = price_element.get_text(strip=True)
+                        if ad_price:
+                            break
+
         if debug:
             self.logger.info(f"URL do anúncio: {ad_url}")
             self.logger.info(f"Título do anúncio (processado): '{ad_title}'")
+            self.logger.info(f"Preço do anúncio: '{ad_price}'")
 
-        return ad_url, ad_title
+        return ad_url, ad_title, ad_price
 
     def _handle_invalid_ad(self, link, ad_url, ad_title):
         """Handle invalid ads (missing URL or title)"""

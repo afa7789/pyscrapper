@@ -313,7 +313,8 @@ class Monitor:
                 self.logger.info(f"🚫 Hash {ad_hash[:8]}...{ad_hash[-8:]} já foi visto - pulando envio")
                 continue
             
-            formatted_ad = f"Título: {ad['title']}\nURL: {ad['url']}\nHash: {ad_hash[:8]}...{ad_hash[-8:]}"
+            price_info = f"\nPreço: {ad['price']}" if ad.get('price') and ad['price'].strip() else ""
+            formatted_ad = f"Título: {ad['title']}\nURL: {ad['url']}{price_info}\nHash: {ad_hash[:8]}...{ad_hash[-8:]}"
             ads_to_send.append(formatted_ad)
             hashes_to_send.append(ad_hash)
         
