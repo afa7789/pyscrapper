@@ -263,16 +263,21 @@ class Monitor:
         truly_new_ads_hash_list = []
         seen_in_this_cycle = set()
         
+        duplicated_count = 0
+        duplicates_in_cycle = 0
         for ad_hash, ad in hash_ad_tuples:
             if ad_hash in self.seen_ads:
+                duplicated_count += 1
                 continue
             if ad_hash in seen_in_this_cycle:
-                self.logger.info(f"🔄 Hash duplicado encontrado no mesmo ciclo: {ad_hash[:8]}...{ad_hash[-8:]} - Ignorando")
+                duplicates_in_cycle += 1
                 continue
             
             seen_in_this_cycle.add(ad_hash)
             truly_new_ads_hash_list.append(ad_hash)
             truly_new_ads.append(ad)
+        
+        self.logger.info(f"🔍 {duplicated_count} já vistos, {duplicates_in_cycle} duplicados no ciclo, {len(truly_new_ads)} novos")
         
         if not truly_new_ads:
             self.logger.info("😿 Nenhum anúncio novo encontrado neste ciclo, acontece!")
@@ -398,32 +403,20 @@ class Monitor:
             
             selected_keyword_sets = self._select_keyword_sets()
             
-            if self.send_as_batch :
-                current_cycle_new_ads = []
-                for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
-                    ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
-                    current_cycle_new_ads.extend(ads_from_set)
-                    
-                    if not self.is_running:
-                        break
+            # Processa cada conjunto individualmente para envio imediato
+            for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
+                ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
+                
+                if not ads_from_set:
+                    continue
+                
+                truly_new_ads, truly_new_ads_hash = self._process_new_ads(ads_from_set)
+                
+                if truly_new_ads:
+                    self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
                 
                 if not self.is_running:
-                    return False
-                
-                truly_new_ads, truly_new_ads_hash = self._process_new_ads(current_cycle_new_ads)
-                
-                self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
-            else:
-                for set_idx, current_keywords_tuple in enumerate(selected_keyword_sets):
-                    ads_from_set = self._scrape_keyword_set(current_keywords_tuple, set_idx, len(selected_keyword_sets))
-                    
-                    if not ads_from_set:
-                        continue
-                    
-                    truly_new_ads, truly_new_ads_hash = self._process_new_ads(ads_from_set)
-                    
-                    if truly_new_ads:
-                        self._send_new_ads_to_telegram(truly_new_ads, truly_new_ads_hash)
+                    break
         except Exception as e:
             self.logger.error(f"❌ Erro geral durante verificação de ciclo: {str(e)}")
         

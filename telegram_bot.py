@@ -48,8 +48,12 @@ class TelegramBot:
             response = requests.post(url, params=params)
 
             if response.status_code != 200:
-                self.logger.error(f"Erro ao enviar mensagem: {response.text}")
-                raise Exception(f"Erro ao enviar mensagem: {response.text}")
+                error_text = response.text
+                if "chat not found" in error_text.lower() or "identificador não encontrado" in error_text.lower():
+                    self.logger.error("❌ TELEGRAM: Inicie uma conversa com o bot primeiro enviando /start")
+                else:
+                    self.logger.error(f"❌ Erro ao enviar mensagem: {error_text}")
+                raise Exception(error_text)
             else:
                 self.logger.info(f"Mensagem enviada com sucesso: {chunk[:18]}...")
 
