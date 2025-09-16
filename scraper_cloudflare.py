@@ -312,31 +312,73 @@ class MarketRoxoScraperCloudflare:
             "[data-testid='ad-price']", 
             ".price",
             ".ad-price",
-            ".fnmrjs-0.cpointer"
+            "h3.olx-adcard__price",
+            ".olx-text.olx-adcard__price"
         ]
         
-        for selector in price_selectors:
-            price_element = link.find(class_=selector.replace(".", "")) if selector.startswith(".") else link.select_one(selector)
-            if price_element:
-                ad_price = price_element.get_text(strip=True)
-                if ad_price:
-                    break
+        # Strategy 1: Look for price in the same parent container as the link
+        containers_to_search = []
         
-        # If no price found in the link itself, try to find it in parent containers
-        if not ad_price:
-            parent = link.parent
-            if parent:
-                for selector in price_selectors:
-                    price_element = parent.find(class_=selector.replace(".", "")) if selector.startswith(".") else parent.select_one(selector)
+        # Add the link's immediate parent
+        if link.parent:
+            containers_to_search.append(link.parent)
+        
+        # Add grandparent and great-grandparent containers (common in card layouts)
+        current = link.parent
+        for _ in range(3):  # Search up to 3 levels up
+            if current and current.parent:
+                current = current.parent
+                containers_to_search.append(current)
+        
+        # Search in each container
+        for container in containers_to_search:
+            if ad_price:  # Break if we already found a price
+                break
+                
+            for selector in price_selectors:
+                try:
+                    if selector.startswith("."):
+                        # Class selector
+                        class_name = selector.replace(".", "")
+                        price_element = container.find(class_=class_name)
+                    elif selector.startswith("[") and selector.endswith("]"):
+                        # Attribute selector
+                        price_element = container.select_one(selector)
+                    else:
+                        # Tag.class selector
+                        price_element = container.select_one(selector)
+                    
                     if price_element:
                         ad_price = price_element.get_text(strip=True)
-                        if ad_price:
+                        if ad_price and "R$" in ad_price:
+                            if debug:
+                                self.logger.info(f"✅ Preço encontrado com seletor '{selector}': '{ad_price}'")
                             break
+                except Exception as e:
+                    if debug:
+                        self.logger.info(f"❌ Erro ao processar seletor '{selector}': {e}")
+                    continue
+        
+        # Strategy 2: If still no price, look for any element containing R$ in the containers
+        if not ad_price:
+            for container in containers_to_search:
+                elements_with_price = container.find_all(string=lambda text: text and 'R$' in str(text))
+                if elements_with_price:
+                    # Get the first price text that looks valid
+                    for price_text in elements_with_price:
+                        clean_price = str(price_text).strip()
+                        if clean_price and clean_price.startswith('R$'):
+                            ad_price = clean_price
+                            if debug:
+                                self.logger.info(f"✅ Preço encontrado por busca de texto: '{ad_price}'")
+                            break
+                if ad_price:
+                    break
 
         if debug:
             self.logger.info(f"URL do anúncio: {ad_url}")
             self.logger.info(f"Título do anúncio (processado): '{ad_title}'")
-            self.logger.info(f"Preço do anúncio: '{ad_price}'")
+            self.logger.info(f"Preço do anúncio final: '{ad_price}'")
 
         return ad_url, ad_title, ad_price
 

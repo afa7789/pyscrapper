@@ -19,3 +19,4 @@ monitor_status.json
 app.log.*
 config.json
 logs
+test_logs/
