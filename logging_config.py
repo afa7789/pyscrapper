@@ -135,11 +135,13 @@ def setup_logging(rotation_type='size', rotation_interval=4):
             logger.info(f"🔄 Configurado rotação por tempo: a cada {rotation_interval} horas")
         else:
             max_bytes = rotation_interval * 1024 * 1024
+            # ConcurrentRotatingFileHandler is process-safe for multiple workers
             handler = ConcurrentRotatingFileHandler(
                 'logs/app.log',
                 maxBytes=max_bytes,
                 backupCount=20,
-                encoding='utf-8'
+                encoding='utf-8',
+                use_gzip=False  # Disable gzip to avoid conflicts
             )
             logger.info(f"🔄 Configurado rotação por tamanho: a cada {rotation_interval}MB")
         
@@ -157,6 +159,7 @@ def setup_hourly_rotation():
     setup_logging(rotation_type='time', rotation_interval=1)
 
 def setup_4hour_rotation():
+    """Setup 4-hour log rotation with process-safe handling"""
     setup_logging(rotation_type='time', rotation_interval=4)
 
 def get_logger():
