@@ -38,7 +38,16 @@ tmp_upload_dir = None
 
 def post_fork(server, worker):
     """Called after worker processes are forked"""
+    import signal
     from logging_config import setup_4hour_rotation, get_logger
+    
+    # Setup signal handler para recarregar logging
+    def reload_logging(signum, frame):
+        setup_4hour_rotation()
+        logger = get_logger()
+        logger.info(f"Worker {worker.pid} recarregou logging após sinal")
+    
+    signal.signal(signal.SIGUSR1, reload_logging)
     
     # Setup logging for this worker with process-safe handlers
     setup_4hour_rotation()

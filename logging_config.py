@@ -167,41 +167,56 @@ def get_logger():
     logger = logging.getLogger('marketroxo')
     signal_file = os.path.join('logs', 'rotation_signal')
     
+    # Sempre verifica se precisa reinicializar após rotação
     if os.path.exists(signal_file):
         try:
             with open(signal_file, 'r') as f:
                 timestamp = f.read().strip()
             os.remove(signal_file)
-            logger.info(f"📢 Detectado sinal de rotação ({timestamp}), reinicializando logger")
+            
+            # Remove handlers antigos
             for handler in logger.handlers[:]:
-                if isinstance(handler, (ConcurrentRotatingFileHandler, CustomTimedRotatingFileHandler)):
-                    handler.flush()
-                    handler.close()
-                    logger.removeHandler(handler)
-            log_file_path = os.path.join('logs', 'app.log')
-            new_handler = CustomTimedRotatingFileHandler(
-                log_file_path,
-                when='h',
-                interval=4,
-                backupCount=24,
-                encoding='utf-8'
-            )
-            new_handler.setFormatter(GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s'))
-            logger.addHandler(new_handler)
-            logger.info("🔄 Logger reinicializado após rotação")
+                handler.flush()
+                handler.close()
+                logger.removeHandler(handler)
+            
+            # Reconfigura logging completamente
+            setup_4hour_rotation()
+            logger.info(f"🔄 Logger reinicializado após rotação ({timestamp}) - PID: {os.getpid()}")
+            
         except Exception as e:
-            logger.error(f"Erro ao reinicializar logger: {e}")
+            print(f"Erro ao reinicializar logger: {e}")
     
+    # Se não tem handlers, configura automaticamente
     if not logger.handlers:
         logger.setLevel(logging.INFO)
-        console_handler = logging.StreamHandler()
-        console_formatter = logging.Formatter(
-            '[%(asctime)s] %(message)s',
-            datefmt='%H:%M:%S'
-        )
-        console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
-        logger.info("🔧 Logger configurado automaticamente para console")
+        is_test_mode = os.getenv('TEST_MODE', '0') == '1'
+        
+        if is_test_mode:
+            console_handler = logging.StreamHandler()
+            console_formatter = logging.Formatter(
+                '[%(asctime)s] %(message)s',
+                datefmt='%H:%M:%S'
+            )
+            console_handler.setFormatter(console_formatter)
+            logger.addHandler(console_handler)
+        else:
+            # Configura handler de arquivo
+            os.makedirs('logs', exist_ok=True)
+            log_file_path = os.path.join('logs', 'app.log')
+            
+            # Usa ConcurrentRotatingFileHandler por ser mais confiável em multi-process
+            handler = ConcurrentRotatingFileHandler(
+                log_file_path,
+                maxBytes=10*1024*1024,  # 10MB
+                backupCount=20,
+                encoding='utf-8',
+                use_gzip=False
+            )
+            handler.setFormatter(GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s'))
+            logger.addHandler(handler)
+        
+        logger.info(f"🔧 Logger configurado automaticamente - PID: {os.getpid()}")
     
     return logger
 
@@ -258,9 +273,22 @@ def force_log_rotation():
         new_handler.setFormatter(GMT3Formatter('%(asctime)s - %(levelname).1s - %(message)s'))
         logger.addHandler(new_handler)
         logger.info("🔄 Novo handler de log configurado após rotação")
-        with open(os.path.join('logs', 'rotation_signal'), 'w') as f:
+        
+        # Cria sinal de rotação para notificar todos os workers
+        signal_file = os.path.join('logs', 'rotation_signal')
+        with open(signal_file, 'w') as f:
             f.write(timestamp)
-        logger.info("📢 Sinal de rotação criado")
+        
+        # Força todos os workers a recarregar handlers na próxima chamada get_logger()
+        import signal
+        import subprocess
+        try:
+            # Envia SIGUSR1 para todos os workers do gunicorn para forçar reload
+            subprocess.run(['pkill', '-SIGUSR1', '-f', 'gunicorn'], check=False)
+            logger.info("📢 Sinal de rotação enviado para todos os workers")
+        except Exception as e:
+            logger.warning(f"Aviso: não foi possível sinalizar workers: {e}")
+        
         return rotated
     except Exception as e:
         logger.error(f"Erro ao configurar novo handler: {e}")
