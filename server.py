@@ -40,6 +40,7 @@ setup_4hour_rotation()
 # Carrega variáveis de ambiente
 load_dotenv()
 
+
 # --- Configurações ---
 CONFIG_FILE_PATH = 'config.json'
 LOGS_DIR = 'logs'
@@ -329,8 +330,6 @@ def start():
 @requires_auth
 def stop():
     global monitor
-    logger = get_logger()
-    
     success = True
     
     # Force stop local monitor thread first
@@ -341,13 +340,13 @@ def stop():
             if monitor.thread and monitor.thread.is_alive():
                 monitor.thread.join(timeout=5)
                 if monitor.thread.is_alive():
-                    logger.error("Monitor thread failed to stop within timeout")
+                    get_logger().error("Monitor thread failed to stop within timeout")
                     success = False
                 else:
-                    logger.info("Local monitor thread stopped")
+                    get_logger().info("Local monitor thread stopped")
             monitor = None
         except Exception as e:
-            logger.error(f"Error stopping monitor thread: {e}")
+            get_logger().error(f"Error stopping monitor thread: {e}")
             success = False
     
     # Handle PID lock cleanup
@@ -365,16 +364,18 @@ def stop():
                         process = psutil.Process(lock_pid)
                         process.terminate()
                         process.wait(timeout=3)
-                        logger.info(f"Process {lock_pid} terminated")
+                        get_logger().info(f"Process {lock_pid} terminated")
                     except Exception as e:
-                        logger.error(f"Failed to terminate process {lock_pid}: {e}")
+                        get_logger().error(f"Failed to terminate process {lock_pid}: {e}")
                         success = False
             
             os.remove(LOCK_FILE)
-            logger.info("Lock file removed")
+            get_logger().info("Lock file removed")
         except Exception as e:
-            logger.error(f"Error handling lock file: {e}")
+            get_logger().error(f"Error handling lock file: {e}")
             success = False
+    
+    get_logger().info(f"Stop operation completed - Success: {success}")
     
     if success:
         return jsonify({"message": "Monitoramento encerrado com sucesso!"}), 200

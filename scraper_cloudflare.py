@@ -17,7 +17,6 @@ class NoAdsFoundError(Exception):
 class MarketRoxoScraperCloudflare:
     def __init__(self, base_url, proxies=""):
         """Initializes the scraper with the base URL and headers."""
-        self.logger = get_logger()
         self.base_url = base_url
         self.proxies = self._setup_proxies(proxies)
 
@@ -40,6 +39,11 @@ class MarketRoxoScraperCloudflare:
         self.delay_max = 35
 
         self.logger.info(f"🥸 MarketRoxoScraper inicializado com bypass Cloudflare")
+
+    @property
+    def logger(self):
+        """Property que sempre retorna o logger atualizado"""
+        return get_logger()
 
     def _setup_proxies(self, proxies):
         """Configura proxies se fornecidos"""

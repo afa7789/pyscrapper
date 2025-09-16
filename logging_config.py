@@ -162,12 +162,26 @@ def setup_4hour_rotation():
     """Setup 4-hour log rotation with process-safe handling"""
     setup_logging(rotation_type='time', rotation_interval=4)
 
+# Cache do logger para evitar overhead
+_logger_cache = None
+_last_check = 0
+
 def get_logger():
-    """Retorna o logger configurado, reinicializando se necessário."""
+    """Retorna o logger configurado, reinicializando apenas se necessário."""
+    global _logger_cache, _last_check
+    import time
+    
+    current_time = time.time()
+    
+    # Só verifica rotação a cada 5 segundos para evitar overhead
+    if _logger_cache and (current_time - _last_check) < 5:
+        return _logger_cache
+    
+    _last_check = current_time
     logger = logging.getLogger('marketroxo')
     signal_file = os.path.join('logs', 'rotation_signal')
     
-    # Sempre verifica se precisa reinicializar após rotação
+    # Verifica se precisa reinicializar após rotação
     if os.path.exists(signal_file):
         try:
             with open(signal_file, 'r') as f:
@@ -183,6 +197,8 @@ def get_logger():
             # Reconfigura logging completamente
             setup_4hour_rotation()
             logger.info(f"🔄 Logger reinicializado após rotação ({timestamp}) - PID: {os.getpid()}")
+            _logger_cache = logger
+            return logger
             
         except Exception as e:
             print(f"Erro ao reinicializar logger: {e}")
@@ -218,6 +234,7 @@ def get_logger():
         
         logger.info(f"🔧 Logger configurado automaticamente - PID: {os.getpid()}")
     
+    _logger_cache = logger
     return logger
 
 def force_log_rotation():

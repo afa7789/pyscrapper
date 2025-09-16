@@ -31,12 +31,12 @@ class Monitor:
         self.scraper = scraper
         self.telegram_bot = telegram_bot
         self.chat_id = chat_id
-        self.logger = get_logger()
+        # Logger como property para sempre obter instância atualizada
         self.is_running = False
         self.stop_event = threading.Event()
         self.monitoring_interval = monitoring_interval
         self.thread = None
-
+        
         # Inicializa sistema de estatísticas
         self.stats = RequestStats(stats_file=stats_file, max_history=max_history)
 
@@ -64,6 +64,11 @@ class Monitor:
         self.max_subset_size = max_subset_size
         self.allow_subset = allow_subset
         self.logger.info(f"👹 Allowing keyword subsets: {self.allow_subset} (min: {self.min_subset_size}, max: {self.max_subset_size})")
+
+    @property
+    def logger(self):
+        """Property que sempre retorna o logger atualizado"""
+        return get_logger()
 
     def get_health_stats(self):
         """Retorna estatísticas para endpoint /health"""
