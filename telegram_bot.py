@@ -4,8 +4,12 @@ from logging_config import get_logger
 class TelegramBot:
     def __init__(self, token):
         self.token = token
-        self.logger = get_logger()
         self.MAX_MESSAGE_LENGTH = 4096  # Telegram's character limit
+
+    @property
+    def logger(self):
+        """Property que sempre retorna o logger atualizado"""
+        return get_logger()
 
     def send_message(self, identifier, text):
         """Sends message to a chat ID, phone number, or username (if valid).
